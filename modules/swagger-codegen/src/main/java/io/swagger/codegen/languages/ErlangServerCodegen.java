@@ -10,7 +10,7 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
 import io.swagger.codegen.*;
 import io.swagger.models.*;
-import io.swagger.util.Json;
+import io.swagger.util.Yaml;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,7 +26,7 @@ public class ErlangServerCodegen extends DefaultCodegen implements CodegenConfig
     private static final Logger LOGGER = LoggerFactory.getLogger(ErlangServerCodegen.class);
 
     protected String apiVersion = "1.0.0";
-    protected String apiPath = "src";
+    protected String apiPath = "";
     protected String packageName = "swagger";
 
     public ErlangServerCodegen() {
@@ -54,9 +54,9 @@ public class ErlangServerCodegen extends DefaultCodegen implements CodegenConfig
          * as with models, add multiple entries with different extensions for multiple files per
          * class
          */
-        apiTemplateFiles.put(
-            "handler.mustache",   // the template to use
-            ".erl");       // the extension for each file to write
+        // apiTemplateFiles.put(
+        //         "handler.mustache",   // the template to use
+        //         ".erl");       // the extension for each file to write
 
         /**
          * Template Location.  This is the location which templates will be read from.  The generator
@@ -76,30 +76,7 @@ public class ErlangServerCodegen extends DefaultCodegen implements CodegenConfig
        );
 
         instantiationTypes.clear();
-
         typeMapping.clear();
-        typeMapping.put("enum", "binary");
-        typeMapping.put("date", "date");
-        typeMapping.put("datetime", "datetime");
-        typeMapping.put("boolean", "boolean");
-        typeMapping.put("string", "binary");
-        typeMapping.put("integer", "integer");
-        typeMapping.put("int", "integer");
-        typeMapping.put("float", "integer");
-        typeMapping.put("long", "integer");
-        typeMapping.put("double", "float");
-        typeMapping.put("array", "list");
-        typeMapping.put("map", "map");
-        typeMapping.put("number", "integer");
-        typeMapping.put("bigdecimal", "float");
-        typeMapping.put("List", "list");
-        typeMapping.put("object", "object");
-        typeMapping.put("file", "file");
-        typeMapping.put("binary", "binary");
-        typeMapping.put("bytearray", "binary");
-        typeMapping.put("byte", "binary");
-        typeMapping.put("uuid", "binary");
-        typeMapping.put("password", "binary");
 
         cliOptions.clear();
         cliOptions.add(new CliOption(CodegenConstants.PACKAGE_NAME, "Erlang package name (convention: lowercase).")
@@ -115,16 +92,19 @@ public class ErlangServerCodegen extends DefaultCodegen implements CodegenConfig
          * entire object tree available.  If the input file has a suffix of `.mustache
          * it will be processed by the template engine.  Otherwise, it will be copied
          */
-        supportingFiles.add(new SupportingFile("rebar.config.mustache","", "rebar.config"));
+        supportingFiles.add(new SupportingFile("swagger.mustache","", "swagger.yaml"));
         supportingFiles.add(new SupportingFile("app.src.mustache", "", "src" + File.separator + this.packageName + ".app.src"));
+        supportingFiles.add(new SupportingFile("include/router_hrl.mustache", "", toIncludeFilePath("router", "hrl")));
         supportingFiles.add(new SupportingFile("router.mustache", "",  toSourceFilePath("router", "erl")));
-        supportingFiles.add(new SupportingFile("api.mustache", "",  toSourceFilePath("api", "erl")));
         supportingFiles.add(new SupportingFile("server.mustache", "",  toSourceFilePath("server", "erl")));
-        supportingFiles.add(new SupportingFile("utils.mustache", "",  toSourceFilePath("utils", "erl")));
-        supportingFiles.add(new SupportingFile("auth.mustache", "",  toSourceFilePath("auth", "erl")));
-        supportingFiles.add(new SupportingFile("swagger.mustache", "", toPrivFilePath("swagger", "json")));
-        supportingFiles.add(new SupportingFile("default_logic_handler.mustache", "",  toSourceFilePath("default_logic_handler", "erl")));
-        supportingFiles.add(new SupportingFile("logic_handler.mustache", "",  toSourceFilePath("logic_handler", "erl")));
+        supportingFiles.add(new SupportingFile("handler.mustache", "",  toSourceFilePath("handler", "erl")));
+
+        /**
+         * Do not reload your main customizing file
+        */
+        if(!new java.io.File(toSourceFilePath("api_config", "erl")).exists()){
+            supportingFiles.add(new SupportingFile("api_config.mustache", "",  toSourceFilePath("api_config", "erl")));
+        }
         writeOptional(outputFolder, new SupportingFile("README.mustache", "", "README.md"));
     }
 
@@ -163,16 +143,16 @@ public class ErlangServerCodegen extends DefaultCodegen implements CodegenConfig
      */
     @Override
     public String getHelp() {
-        return "Generates an Erlang server library (beta) using the Swagger Codegen project. By default, " +
-                "it will also generate service classes, which can be disabled with the `-Dnoservice` environment variable.";
+        return "Generates an Erlang server library using the swagger-tools project.  By default, " +
+                "it will also generate service classes--which you can disable with the `-Dnoservice` environment variable.";
     }
 
     @Override
     public String toApiName(String name) {
         if (name.length() == 0) {
-            return this.packageName + "_default_handler";
+            return "DefaultController";
         }
-        return this.packageName + "_" + underscore(name) + "_handler";
+        return initialCaps(name);
     }
 
     /**
@@ -182,11 +162,8 @@ public class ErlangServerCodegen extends DefaultCodegen implements CodegenConfig
      * @return the escaped term
      */
     @Override
-    public String escapeReservedWord(String name) {           
-        if(this.reservedWordsMappings().containsKey(name)) {
-            return this.reservedWordsMappings().get(name);
-        }
-        return "_" + name;
+    public String escapeReservedWord(String name) {
+        return "_" + name;  // add an underscore to the name
     }
 
     /**
@@ -200,6 +177,8 @@ public class ErlangServerCodegen extends DefaultCodegen implements CodegenConfig
 
     @Override
     public String toModelName(String name) {
+        // camelize the model name
+        // phone_number => PhoneNumber
         return camelize(toModelFilename(name));
     }
 
@@ -215,8 +194,53 @@ public class ErlangServerCodegen extends DefaultCodegen implements CodegenConfig
     }
 
     @Override
+    public String toModelFilename(String name) {
+        if (!StringUtils.isEmpty(modelNamePrefix)) {
+            name = modelNamePrefix + "_" + name;
+        }
+
+        if (!StringUtils.isEmpty(modelNameSuffix)) {
+            name = name + "_" + modelNameSuffix;
+        }
+
+        name = sanitizeName(name);
+
+        // model name cannot use reserved keyword, e.g. return
+        if (isReservedWord(name)) {
+            LOGGER.warn(name + " (reserved word) cannot be used as model name. Renamed to " + camelize("model_" + name));
+            name = "model_" + name; // e.g. return => ModelReturn (after camelize)
+        }
+
+        return underscore(name);
+    }
+
+    @Override
     public String toApiFilename(String name) {
-        return toHandlerName(name);
+        // replace - with _ e.g. created-at => created_at
+        name = name.replaceAll("-", "_"); // FIXME: a parameter should not be assigned. Also declare the methods parameters as 'final'.
+
+        return this.packageName + "_" + name + "_handler";
+    }
+
+    @Override
+    public Map<String, Object> postProcessSupportingFileData(Map<String, Object> objs) {
+        Swagger swagger = (Swagger)objs.get("swagger");
+        if(swagger != null) {
+            try {
+                objs.put("swagger-yaml", Yaml.mapper().writeValueAsString(swagger));
+            } catch (JsonProcessingException e) {
+                LOGGER.error(e.getMessage(), e);
+            }
+        }
+        return super.postProcessSupportingFileData(objs);
+    }
+
+    protected String toSourceFilePath(String name, String extension) {
+        return "src" + File.separator +  this.packageName + "_" + name + "." + extension;
+    }
+
+    protected String toIncludeFilePath(String name, String extension) {
+        return "include" + File.separator + this.packageName + "_" + name + "." + extension;
     }
 
     @Override
@@ -231,53 +255,8 @@ public class ErlangServerCodegen extends DefaultCodegen implements CodegenConfig
         return objs;
     }
 
-    @Override
-    public Map<String, Object> postProcessSupportingFileData(Map<String, Object> objs) {
-        Swagger swagger = (Swagger)objs.get("swagger");
-        if(swagger != null) {
-            try {
-                objs.put("swagger-json", Json.mapper().writeValueAsString(swagger));
-            } catch (JsonProcessingException e) {
-                LOGGER.error(e.getMessage(), e);
-            }
-        }
-        return super.postProcessSupportingFileData(objs);
-    }
-
     public void setPackageName(String packageName) {
         this.packageName = packageName;
-    }
-
-    protected String toHandlerName(String name) {
-        return toModuleName(name) + "_handler";
-    }
-
-    protected String toModuleName(String name) {
-        return this.packageName + "_" + underscore(name.replaceAll("-", "_"));
-    }
-
-    protected String toSourceFilePath(String name, String extension) {
-        return "src" + File.separator +  toModuleName(name) + "." + extension;
-    }
-
-    protected String toIncludeFilePath(String name, String extension) {
-        return "include" + File.separator + toModuleName(name) + "." + extension;
-    }
-
-    protected String toPrivFilePath(String name, String extension) {
-        return "priv" + File.separator + name + "." + extension;
-    }
-
-    @Override
-    public String escapeQuotationMark(String input) {
-        // remove ' to avoid code injection
-        return input.replace("'", "");
-    }
-
-    @Override
-    public String escapeUnsafeCharacters(String input) {
-        // ref: http://stackoverflow.com/a/30421295/677735
-        return input.replace("-ifdef", "- if def").replace("-endif", "- end if");
     }
 
 }
