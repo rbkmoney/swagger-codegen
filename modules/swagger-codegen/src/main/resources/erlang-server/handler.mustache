@@ -28,9 +28,9 @@
 init(_Transport, Req, Opts) ->
     {upgrade, protocol, cowboy_rest, Req, Opts}.
 
-rest_init(Req0, [LogicHandler, ValidatorState]) ->
+rest_init(Req0, [Operations, LogicHandler, ValidatorState]) ->
     {Method, Req} = cowboy_req:method(Req0),
-    OperationID = {{packageName}}_router:get_operation_id(Method, ?MODULE),
+    OperationID = maps:get(Method, Operations, undefined),
     State = #state{
         operation_id = OperationID,
         logic_handler = LogicHandler,
