@@ -21,10 +21,14 @@ group_paths() ->
     maps:fold(
         fun(OperationID, #{path := Path, method := Method, handler := Handler}, Acc) ->
             case maps:find(Path, Acc) of
-                {ok, PathInfo = #{operations := Operations}} ->
-                    maps:put(Path, PathInfo#{operations => maps:put(Method, OperationID, Operations)}, Acc);
+                {ok, PathInfo0 = #{operations := Operations0}} ->
+                    Operations = Operations0#{Method => OperationID},
+                    PathInfo = PathInfo0#{operations => Operations},
+                    Acc#{Path => PathInfo};
                 error ->
-                    maps:put(Path, #{handler => Handler, operations => maps:put(Method, OperationID, #{})}, Acc)
+                    Operations = #{Method => OperationID},
+                    PathInfo = #{handler => Handler, operations => Operations},
+                    Acc#{Path => PathInfo}
             end
         end,
         #{},
@@ -34,7 +38,7 @@ group_paths() ->
 get_operations() ->
     #{ {{#apiInfo}}{{#apis}}{{#operations}}{{#operation}}
         '{{operationId}}' => #{
-            path => "{{path}}",
+            path => "{{basePathWithoutHost}}{{path}}",
             method => <<"{{httpMethod}}">>,
             handler => '{{classname}}'
         }{{#hasMore}},{{/hasMore}}{{/operation}}{{#hasMore}},{{/hasMore}}{{/operations}}{{/apis}}{{/apiInfo}}
