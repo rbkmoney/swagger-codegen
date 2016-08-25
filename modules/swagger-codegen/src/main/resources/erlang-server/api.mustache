@@ -117,8 +117,8 @@ validate( Rule = {type, 'integer'}, Name, Value, _ValidatorState) ->
     try
         {ok, {{packageName}}_utils:to_int(Value)}
     catch
-        _:Error ->
-            validation_error(Rule, {Name, Error})
+        _:_ ->
+            validation_error(Rule, Name)
     end;
 
 validate( Rule = {type, 'float'}, Name, Value, _ValidatorState) ->
@@ -223,16 +223,31 @@ validate( Rule = schema, Name, Value, ValidatorState) ->
         validate_with_schema(Value, Definition, ValidatorState),
         ok
     catch
-        _:_ ->
-            validation_error(Rule, Name)
+        throw:[{schema_invalid, _, Error} | _] ->
+            Info = #{
+                type => schema_invalid,
+                error => Error
+            },
+            validation_error(Rule, Name, Info);
+        throw:[{data_invalid, Schema, Error, _, Path} | _] ->
+            Info = #{
+                type => data_invalid,
+                error => Error,
+                schema => Schema,
+                path => Path
+            },
+            validation_error(Rule, Name, Info)
     end;
 
 validate(Rule, Name, Value, _ValidatorState) ->
     io:format("Skipping unknown validation: ~p~n", [{Rule, Name, Value}]),
     ok.
 
-validation_error(Name, Violated) ->
-    throw({wrong_param, Name, Violated}).
+validation_error(ViolatedRule, Name) ->
+    validation_error(ViolatedRule, Name, #{}).
+
+validation_error(ViolatedRule, Name, Info) ->
+    throw({wrong_param, Name, ViolatedRule, Info}).
 
 get_value(body, _Name, Req0) ->
     {ok, Body, Req} = cowboy_req:body(Req0),

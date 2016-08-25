@@ -31,6 +31,10 @@ init(_Transport, Req, Opts) ->
 rest_init(Req0, [Operations, LogicHandler, ValidatorState]) ->
     {Method, Req} = cowboy_req:method(Req0),
     OperationID = maps:get(Method, Operations, undefined),
+
+    Message = io_lib:format("Attempt to process operation: ~p", [OperationID]),
+    report(info, Message),
+
     State = #state{
         operation_id = OperationID,
         logic_handler = LogicHandler,
@@ -96,6 +100,28 @@ valid_entity_length(Req, State) ->
     {true, Req, State}.
 
 %%%%
+
+-type handle_response() ::
+    {ok, {Status :: cowboy:http_status(), Headers :: cowboy:http_headers(), Body :: iodata()}, Req :: cowboy_req:req()} |
+    {error, Reason :: any(), Req :: cowboy_req:req()}.
+
+-spec handle_request(Response :: handle_response(), #state{}, cowboy_req:req()) -> {halt, cowboy_req:req(), #state{}}.
+
+handle_request(Response, Req0, State = #state{operation_id = OperationID}) ->
+    case Response of
+        {ok, {Code, Headers, Body}} ->
+            {ok, Req} = cowboy_req:reply(Code, Headers, Body, Req0),
+            {halt, Req, State};
+        {error, Message} ->
+            Reason = io_lib:format("Unable to process request for ~p: ~p", [OperationID, Message]),
+            report(error, Reason),
+
+            {ok, Req} = cowboy_req:reply(400, Req0),
+            {halt, Req, State}
+    end.
+
+-spec handle_request_json(cowboy_req:req(), #state{}) -> {halt, cowboy_req:req(), #state{}}.
+
 handle_request_json(
     Req0,
     State = #state{
@@ -111,11 +137,22 @@ handle_request_json(
                 {Code, Headers, Body} ->
                     {{packageName}}_api:validate_response(OperationID, Code, Body , ValidatorState),
                     PreparedBody = jsx:encode(Body),
-                    {ok, Req} = cowboy_req:reply(Code, Headers, PreparedBody, Req1),
-                    {halt, Req, State}
+                    Response = {ok, {Code, Headers, PreparedBody}},
+                    handle_request(Response, Req1, State)
             end;
-        {error, _Reason, Req1} ->
-            {false, Req1, State}
+        {error, Reason, Req1} ->
+            handle_request({error, Reason}, Req1, State)
     end.
 
 validate_headers(_, Req) -> {true, Req}.
+
+-spec report(Level :: error | info | warning, Message :: iodata()) -> ok.
+
+report(info, Message) ->
+    error_logger:info_msg(Message);
+
+report(warning, Message) ->
+    error_logger:warning_msg(Message);
+
+report(error, Message) ->
+    error_logger:error_msg(Message).
