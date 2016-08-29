@@ -19,14 +19,22 @@
 -export([handle_request_json/2]).
 
 -record(state, {
-    operation_id,
-    logic_handler,
-    validator_state,
-    context=#{}
+    operation_id :: atom(),
+    logic_handler :: atom(),
+    validator_state :: jesse_state:state(),
+    context=#{} :: #{}
 }).
+
+-type init_opts()  :: [any()].
+
+-spec init(TransportName :: atom(), Req :: cowboy_req:req(), Opts :: init_opts())
+-> {upgrade, protocol, cowboy_rest, Req :: cowboy_req:req(), Opts :: init_opts()}.
 
 init(_Transport, Req, Opts) ->
     {upgrade, protocol, cowboy_rest, Req, Opts}.
+
+-spec rest_init(Req :: cowboy_req:req(), Opts :: init_opts())
+-> {ok, Req :: cowboy_req:req(), State :: #state{}}.
 
 rest_init(Req0, [Operations, LogicHandler, ValidatorState]) ->
     {Method, Req} = cowboy_req:method(Req0),
@@ -42,6 +50,9 @@ rest_init(Req0, [Operations, LogicHandler, ValidatorState]) ->
     },
     {ok, Req, State}.
 
+-spec allowed_methods(Req :: cowboy_req:req(), State :: #state{})
+-> {Value :: any(), Req :: cowboy_req:req(), State :: #state{}}.
+
 {{#operations}}{{#operation}}
 allowed_methods(Req, State = #state{operation_id = '{{operationId}}'}) ->
     {[<<"{{httpMethod}}">>], Req, State};
@@ -49,6 +60,8 @@ allowed_methods(Req, State = #state{operation_id = '{{operationId}}'}) ->
 allowed_methods(Req, State) ->
     {[], Req, State}.
 
+-spec is_authorized(Req :: cowboy_req:req(), State :: #state{})
+-> {Value :: any(), Req :: cowboy_req:req(), State :: #state{}}.
 {{#operations}}{{#operation}}
 is_authorized(Req0, State = #state{operation_id = '{{operationId}}' = OperationID, logic_handler = LogicHandler}) ->
 {{#authMethods}}
@@ -64,11 +77,15 @@ is_authorized(Req0, State = #state{operation_id = '{{operationId}}' = OperationI
 is_authorized(Req, State) ->
     {{false, <<"">>}, Req, State}.
 
+-spec content_types_accepted(Req :: cowboy_req:req(), State :: #state{})
+-> {Value :: any(), Req :: cowboy_req:req(), State :: #state{}}.
 content_types_accepted(Req, State) ->
     {[
         {<<"application/json">>, handle_request_json}
     ], Req, State}.
 
+-spec valid_content_headers(Req :: cowboy_req:req(), State :: #state{})
+-> {Value :: any(), Req :: cowboy_req:req(), State :: #state{}}.
 {{#operations}}{{#operation}}
 valid_content_headers(Req0, State = #state{operation_id = '{{operationId}}'}) ->
     Headers = [{{#headerParams}}"{{baseName}}"{{#hasMore}},{{/hasMore}}{{/headerParams}}],
@@ -78,22 +95,40 @@ valid_content_headers(Req0, State = #state{operation_id = '{{operationId}}'}) ->
 valid_content_headers(Req, State) ->
     {false, Req, State}.
 
+-spec content_types_provided(Req :: cowboy_req:req(), State :: #state{})
+-> {Value :: any(), Req :: cowboy_req:req(), State :: #state{}}.
+
 content_types_provided(Req, State) ->
     {[
         {<<"application/json">>, handle_request_json}
     ], Req, State}.
 
+-spec malformed_request(Req :: cowboy_req:req(), State :: #state{})
+-> {Value :: any(), Req :: cowboy_req:req(), State :: #state{}}.
+
 malformed_request(Req, State) ->
     {false, Req, State}.
+
+-spec allow_missing_post(Req :: cowboy_req:req(), State :: #state{})
+-> {Value :: any(), Req :: cowboy_req:req(), State :: #state{}}.
 
 allow_missing_post(Req, State) ->
     {false, Req, State}.
 
+-spec delete_resource(Req :: cowboy_req:req(), State :: #state{})
+-> {Value :: any(), Req :: cowboy_req:req(), State :: #state{}}.
+
 delete_resource(Req, State) ->
     handle_request_json(Req, State).
 
+-spec known_content_type(Req :: cowboy_req:req(), State :: #state{})
+-> {Value :: any(), Req :: cowboy_req:req(), State :: #state{}}.
+
 known_content_type(Req, State) ->
     {true, Req, State}.
+
+-spec valid_entity_length(Req :: cowboy_req:req(), State :: #state{})
+-> {Value :: any(), Req :: cowboy_req:req(), State :: #state{}}.
 
 valid_entity_length(Req, State) ->
     %% @TODO check the length
@@ -101,13 +136,14 @@ valid_entity_length(Req, State) ->
 
 %%%%
 
--type handle_response() ::
-    {ok, {Status :: cowboy:http_status(), Headers :: cowboy:http_headers(), Body :: iodata()}, Req :: cowboy_req:req()} |
-    {error, Reason :: any(), Req :: cowboy_req:req()}.
+-type handler_response() ::
+    {ok, {Status :: cowboy:http_status(), Headers :: cowboy:http_headers(), Body :: binary()}} |
+    {error, Reason :: any()}.
 
--spec handle_request(Response :: handle_response(), #state{}, cowboy_req:req()) -> {halt, cowboy_req:req(), #state{}}.
+-spec process_response(Response :: handler_response(), cowboy_req:req(), #state{}) -> {halt, cowboy_req:req(), #state{}}.
 
-handle_request(Response, Req0, State = #state{operation_id = OperationID}) ->
+
+process_response(Response, Req0, State = #state{operation_id = OperationID}) ->
     case Response of
         {ok, {Code, Headers, Body}} ->
             {ok, Req} = cowboy_req:reply(Code, Headers, Body, Req0),
@@ -138,21 +174,18 @@ handle_request_json(
                     {{packageName}}_api:validate_response(OperationID, Code, Body , ValidatorState),
                     PreparedBody = jsx:encode(Body),
                     Response = {ok, {Code, Headers, PreparedBody}},
-                    handle_request(Response, Req1, State)
+                    process_response(Response, Req1, State)
             end;
         {error, Reason, Req1} ->
-            handle_request({error, Reason}, Req1, State)
+            process_response({error, Reason}, Req1, State)
     end.
 
 validate_headers(_, Req) -> {true, Req}.
 
--spec report(Level :: error | info | warning, Message :: iodata()) -> ok.
+-spec report(Level :: error | info, Message :: iodata()) -> ok.
 
 report(info, Message) ->
     error_logger:info_msg(Message);
-
-report(warning, Message) ->
-    error_logger:warning_msg(Message);
 
 report(error, Message) ->
     error_logger:error_msg(Message).

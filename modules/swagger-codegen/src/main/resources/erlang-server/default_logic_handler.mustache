@@ -11,10 +11,16 @@
 
 {{#authMethods}}
     {{#isApiKey}}
+-spec authorize_api_key(ApiKey :: binary(), OperationID :: atom()) -> {true, #{}}.
+
 authorize_api_key(_, _) -> {true, #{}}.
     {{/isApiKey}}
 {{/authMethods}}
 
+-spec handle_request(OperationID :: atom(), Req :: cowboy_req:req(), Context :: #{})
+-> {Code :: integer(), Headers :: [], Body :: binary()}.
+
 handle_request(OperationID, Req, Context) ->
-    io:format(user, "Got request to process: ~p~n", [{OperationID, Req, Context}]),
-    {501, [], <<"Not Implemented">>}.
+    Message = io_lib:format("Got not implemented request to process: ~p~n", [{OperationID, Req, Context}]),
+    error_logger:info_msg(Message),
+    {501, [], <<"">>}.

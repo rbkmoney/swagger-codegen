@@ -5,7 +5,7 @@
 -export([populate_request/3]).
 -export([validate_response/4]).
 
-
+-spec request_params(OperationID :: atom()) -> [Param :: atom()].
 {{#apiInfo}}{{#apis}}
 {{#operations}}{{#operation}}
 request_params('{{operationId}}') ->
@@ -16,6 +16,11 @@ request_params('{{operationId}}') ->
 {{/operation}}{{/operations}}{{/apis}}{{/apiInfo}}
 request_params(_) ->
     error(unknown_operation).
+
+-spec request_param_info(OperationID :: atom(), Name :: atom()) -> #{
+    source => qs_val | binding | header | body,
+    rules => [any()]
+}.
 
 {{#apiInfo}}{{#apis}}
 {{#operations}}{{#operation}}{{#allParams}}
@@ -50,6 +55,9 @@ request_param_info('{{operationId}}', {{^isBodyParam}}'{{baseName}}'{{/isBodyPar
 request_param_info(OperationID, Name) ->
     error({unknown_param, OperationID, Name}).
 
+-spec populate_request(OperationID :: atom(), Req :: cowboy_req:req(), ValidatorState :: jesse_state:state())
+-> {ok, Model :: #{}, Req :: cowboy_req:req()} | {error, Reason :: any(), Req :: cowboy_req:req()}.
+
 populate_request(OperationID, Req, ValidatorState) ->
     Params = request_params(OperationID),
     populate_request_params(OperationID, Params, Req, ValidatorState, #{}).
@@ -74,7 +82,12 @@ populate_request_param(OperationID, Name, Req0, ValidatorState) ->
             {error, Reason, Req}
     end.
 
-
+-spec validate_response(
+    OperationID :: atom(),
+    Code :: integer(),
+    Body :: binary(),
+    ValidatorState :: jesse_state:state()
+) -> ok | no_return().
 {{#apiInfo}}{{#apis}}
 {{#operations}}{{#operation}}
 {{#responses}}
@@ -85,12 +98,6 @@ validate_response('{{operationId}}', {{code}}, Body, ValidatorState) ->
 
 validate_response(_OperationID, _Code, _Body, _ValidatorState) ->
     ok.
-
-validate_response_body(undefined, _, Body, _) ->
-    case Body of
-        #{} -> ok;
-        _ -> throw(invalid_response)
-    end;
 
 validate_response_body('list', ReturnBaseType, Body, ValidatorState) ->
     [
@@ -220,7 +227,7 @@ validate( Rule = {pattern, Pattern}, Name, Value, _ValidatorState) ->
 validate( Rule = schema, Name, Value, ValidatorState) ->
     Definition =  list_to_binary("#/definitions/" ++ {{packageName}}_utils:to_list(Name)),
     try
-        validate_with_schema(Value, Definition, ValidatorState),
+        _ = validate_with_schema(Value, Definition, ValidatorState),
         ok
     catch
         throw:[{schema_invalid, _, Error} | _] ->
@@ -243,8 +250,12 @@ validate(Rule, Name, Value, _ValidatorState) ->
     io:format("Skipping unknown validation: ~p~n", [{Rule, Name, Value}]),
     ok.
 
+-spec validation_error(Rule :: any(), Name :: any()) -> no_return().
+
 validation_error(ViolatedRule, Name) ->
     validation_error(ViolatedRule, Name, #{}).
+
+-spec validation_error(Rule :: any(), Name :: any(), Info :: #{}) -> no_return().
 
 validation_error(ViolatedRule, Name, Info) ->
     throw({wrong_param, Name, ViolatedRule, Info}).

@@ -2,6 +2,8 @@
 
 -export([get_paths/1]).
 
+-spec get_paths(LogicHandler :: atom()) ->  [{'_',[any()]},...].
+
 get_paths(LogicHandler) ->
     ValidatorState = prepare_validator(),
     PreparedPaths = maps:fold(
