@@ -6,10 +6,11 @@
 -export([validate_response/4]).
 
 -type operation_id() :: atom().
+-type request_param() :: atom().
 
 -export_type([operation_id/0]).
 
--spec request_params(OperationID :: operation_id()) -> [Param :: atom()].
+-spec request_params(OperationID :: operation_id()) -> [Param :: request_param()].
 {{#apiInfo}}{{#apis}}
 {{#operations}}{{#operation}}
 request_params('{{operationId}}') ->
@@ -41,7 +42,7 @@ request_params(_) ->
     required |
     not_required.
 
--spec request_param_info(OperationID :: operation_id(), Name :: atom()) -> #{
+-spec request_param_info(OperationID :: operation_id(), Name :: request_param()) -> #{
     source => qs_val | binding | header | body,
     rules => [rule()]
 }.
@@ -113,7 +114,7 @@ populate_request_param(OperationID, Name, Req0, ValidatorState) ->
 
 -spec validate_response(
     OperationID :: operation_id(),
-    Code :: integer(),
+    Code :: non_neg_integer(),
     Body :: jesse:json_term(),
     ValidatorState :: jesse_state:state()
 ) -> ok | no_return().

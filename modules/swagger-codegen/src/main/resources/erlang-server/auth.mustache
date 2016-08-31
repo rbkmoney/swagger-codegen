@@ -44,7 +44,7 @@ get_api_key(header, KeyParam, Req0) ->
 
 get_api_key(qs_val, KeyParam, Req0) ->
   {QS, Req} = cowboy_req:qs_vals(Req0),
-  {swagger_utils:get_opt(KeyParam, QS), Req}.
+  { {{packageName}}_utils:get_opt(KeyParam, QS), Req}.
 
 
 
