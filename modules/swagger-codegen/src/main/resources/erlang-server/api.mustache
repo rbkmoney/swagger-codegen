@@ -114,7 +114,7 @@ populate_request_param(OperationID, Name, Req0, ValidatorState) ->
 
 -spec validate_response(
     OperationID :: operation_id(),
-    Code :: non_neg_integer(),
+    Code :: 200..599,
     Body :: jesse:json_term(),
     ValidatorState :: jesse_state:state()
 ) -> ok | no_return().
