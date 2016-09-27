@@ -8,7 +8,17 @@
 -type operation_id() :: atom().
 -type request_param() :: atom().
 
+
+-type request_context() :: #{
+    auth_context => AuthContext :: {{packageName}}_auth:context(),
+    peer => #{
+        ip_address => IP :: inet:ip_address(),
+        port_number => Port :: inet:port_number()
+    }
+}.
+
 -export_type([operation_id/0]).
+-export_type([request_context/0]).
 
 -spec request_params(OperationID :: operation_id()) -> [Param :: request_param()].
 {{#apiInfo}}{{#apis}}
