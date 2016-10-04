@@ -20,7 +20,7 @@ authorize_api_key(_, _) -> {true, #{}}.
 -spec handle_request(
     OperationID :: {{packageName}}_api:operation_id(),
     Req :: cowboy_req:req(),
-    Context :: #{}
+    Context :: {{packageName}}_api:request_context()
 ) ->
     {Status :: cowboy:http_status(), Headers :: cowboy:http_headers(), Body :: #{}}.
 

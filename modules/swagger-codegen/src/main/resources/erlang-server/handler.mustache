@@ -23,7 +23,7 @@
     operation_id :: {{packageName}}_api:operation_id(),
     logic_handler :: atom(),
     validator_state :: jesse_state:state(),
-    context=#{} :: #{}
+    context :: {{packageName}}_api:request_context()
 }).
 
 -type state() :: state().
@@ -47,7 +47,8 @@ rest_init(Req0, {Operations, LogicHandler, ValidatorState}) ->
     State = #state{
         operation_id = OperationID,
         logic_handler = LogicHandler,
-        validator_state = ValidatorState
+        validator_state = ValidatorState,
+        context = #{}
     },
 
     {ok, Req1, State}.
@@ -78,7 +79,8 @@ is_authorized(
     Req0,
     State = #state{
         operation_id = '{{operationId}}' = OperationID,
-        logic_handler = LogicHandler
+        logic_handler = LogicHandler,
+        context = Context
     }
 ) ->
 {{#authMethods}}
@@ -92,8 +94,13 @@ is_authorized(
         Req0
     ),
     case Result of
-        {true, Context, Req} ->  {true, Req, State#state{context = Context}};
-        {false, AuthHeader, Req} ->  {{false, AuthHeader}, Req, State}
+        {true, AuthContext, Req} ->
+            NewContext = Context#{
+                auth_context => AuthContext
+            },
+            {true, Req, State#state{context = NewContext}};
+        {false, AuthHeader, Req} ->
+            {{false, AuthHeader}, Req, State}
     end;
   {{/isApiKey}}
 {{/authMethods}}
@@ -150,12 +157,12 @@ charsets_provided(Req, State) ->
 -spec malformed_request(Req :: cowboy_req:req(), State :: state()) ->
     {Value :: boolean(), Req :: cowboy_req:req(), State :: state()}.
 
-malformed_request(Req, State) ->
+malformed_request(Req, State = #state{context = Context}) ->
     {PeerResult, Req1} = determine_peer(Req),
     case PeerResult of
         {ok, Peer} ->
-            Context = #{peer => Peer},
-            State1 = State#state{context = Context},
+            Context1 = Context#{peer => Peer},
+            State1 = State#state{context = Context1},
             {false, Req1, State1};
         {error, Reason} ->
             error_logger:error_msg("Unable to determine client peer: ~p", [Reason]),

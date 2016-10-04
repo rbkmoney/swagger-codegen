@@ -2,13 +2,17 @@
 
 -export([authorize_api_key/5]).
 
+-type context() :: #{binary() => any()}.
+
+-export_type([context/0]).
+
 -spec authorize_api_key(
     LogicHandler :: atom(),
     OperationID :: {{packageName}}_api:operation_id(),
     From :: header | qs_val,
     KeyParam :: iodata() | atom(),
     Req ::cowboy_req:req()
-)-> {true, Context :: #{binary() => any()}, Req ::cowboy_req:req()} |
+)-> {true, Context :: context(), Req ::cowboy_req:req()} |
     {false, AuthHeader :: binary(), Req ::cowboy_req:req()}.
 
 authorize_api_key(LogicHandler, OperationID, From, KeyParam, Req0) ->
