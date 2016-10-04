@@ -22,7 +22,7 @@
     operation_id :: {{packageName}}_api:operation_id(),
     logic_handler :: atom(),
     validator_state :: jesse_state:state(),
-    context=#{} :: #{}
+    context :: {{packageName}}_api:request_context()
 }).
 
 -type state() :: state().
@@ -37,17 +37,27 @@ init(_Transport, Req, Opts) ->
     {ok, Req :: cowboy_req:req(), State :: state()}.
 
 rest_init(Req0, {Operations, LogicHandler, ValidatorState}) ->
-    {Method, Req} = cowboy_req:method(Req0),
+    {Method, Req1} = cowboy_req:method(Req0),
+    {{IP, Port}, Req2} = cowboy_req:peer(Req1),
     OperationID = maps:get(Method, Operations, undefined),
 
     error_logger:info_msg("Attempt to process operation: ~p", [OperationID]),
 
+    Context = #{
+        peer => #{
+            ip_address => IP,
+            port_number => Port
+        }
+    },
+
     State = #state{
         operation_id = OperationID,
         logic_handler = LogicHandler,
-        validator_state = ValidatorState
+        validator_state = ValidatorState,
+        context = Context
     },
-    {ok, Req, State}.
+
+    {ok, Req2, State}.
 
 -spec allowed_methods(Req :: cowboy_req:req(), State :: state()) ->
     {Value :: [binary()], Req :: cowboy_req:req(), State :: state()}.
@@ -75,7 +85,8 @@ is_authorized(
     Req0,
     State = #state{
         operation_id = '{{operationId}}' = OperationID,
-        logic_handler = LogicHandler
+        logic_handler = LogicHandler,
+        context = Context
     }
 ) ->
 {{#authMethods}}
@@ -89,8 +100,13 @@ is_authorized(
         Req0
     ),
     case Result of
-        {true, Context, Req} ->  {true, Req, State#state{context = Context}};
-        {false, AuthHeader, Req} ->  {{false, AuthHeader}, Req, State}
+        {true, AuthContext, Req} ->
+            NewContext = Context#{
+                auth_context => AuthContext
+            },
+            {true, Req, State#state{context = NewContext}};
+        {false, AuthHeader, Req} ->
+            {{false, AuthHeader}, Req, State}
     end;
   {{/isApiKey}}
 {{/authMethods}}
