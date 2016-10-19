@@ -1,5 +1,11 @@
 # Swagger rest server library for Erlang
 
+## Notes
+
+ * Generated code enforces UTF-8 encoding on every request and response.
+   Clients which fail to specify it in their request through proper content type
+   header would be rejected with a `415 Unsupported Media Type`.
+
 ## TODO
 - [ ] Write specs for static exported fuctions
 - [ ] Write specs for generated exported fuctions
