@@ -8,6 +8,7 @@
 -export([allow_missing_post/2]).
 -export([content_types_accepted/2]).
 -export([content_types_provided/2]).
+-export([charsets_provided/2]).
 -export([delete_resource/2]).
 -export([is_authorized/2]).
 -export([known_content_type/2]).
@@ -26,7 +27,7 @@
 }).
 
 -type state() :: state().
--type content_type() :: {binary(), binary(), [{binary(), binary()}]}.
+-type content_type() :: {binary(), binary(), '*' | [{binary(), binary()}]}.
 
 -spec init(TransportName :: atom(), Req :: cowboy_req:req(), Opts :: {{packageName}}_router:init_opts()) ->
     {upgrade, protocol, cowboy_rest, Req :: cowboy_req:req(), Opts :: {{packageName}}_router:init_opts()}.
@@ -114,7 +115,7 @@ is_authorized(Req, State) ->
 
 content_types_accepted(Req, State) ->
     {[
-        {get_content_type(), handle_request_json}
+        {{<<"application">>, <<"json">>, [{<<"charset">>, <<"utf-8">>}]}, handle_request_json}
     ], Req, State}.
 
 -spec valid_content_headers(Req :: cowboy_req:req(), State :: state()) ->
@@ -142,11 +143,14 @@ valid_content_headers(Req, State) ->
 
 content_types_provided(Req, State) ->
     {[
-        {get_content_type(), handle_request_json}
+        {{<<"application">>, <<"json">>, '*'}, handle_request_json}
     ], Req, State}.
 
-get_content_type() ->
-    {<<"application">>, <<"json">>, [{<<"charset">>, <<"utf-8">>}]}.
+-spec charsets_provided(Req :: cowboy_req:req(), State :: state()) ->
+    {Charsets :: [binary()], Req :: cowboy_req:req(), State :: state()}.
+
+charsets_provided(Req, State) ->
+    {[<<"utf-8">>], Req, State}.
 
 -spec malformed_request(Req :: cowboy_req:req(), State :: state()) ->
     {Value :: false, Req :: cowboy_req:req(), State :: state()}.
