@@ -123,7 +123,7 @@ is_authorized(Req, State) ->
 
 content_types_accepted(Req, State) ->
     {[
-        {<<"application/json">>, handle_request_json}
+        {get_content_type(), handle_request_json}
     ], Req, State}.
 
 -spec valid_content_headers(Req :: cowboy_req:req(), State :: state()) ->
@@ -151,8 +151,11 @@ valid_content_headers(Req, State) ->
 
 content_types_provided(Req, State) ->
     {[
-        {<<"application/json">>, handle_request_json}
+        {get_content_type(), handle_request_json}
     ], Req, State}.
+
+get_content_type() ->
+    {<<"application">>, <<"json">>, [{<<"charset">>, <<"utf-8">>}]}.
 
 -spec malformed_request(Req :: cowboy_req:req(), State :: state()) ->
     {Value :: false, Req :: cowboy_req:req(), State :: state()}.
