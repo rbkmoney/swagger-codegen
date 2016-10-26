@@ -54,29 +54,7 @@ request_params(_) ->
 request_param_info('{{operationId}}', {{^isBodyParam}}'{{baseName}}'{{/isBodyParam}}{{#isBodyParam}}'{{dataType}}'{{/isBodyParam}}) ->
     #{
         source => {{#isQueryParam}}qs_val{{/isQueryParam}} {{#isPathParam}}binding{{/isPathParam}} {{#isHeaderParam}}header{{/isHeaderParam}}{{#isBodyParam}}body{{/isBodyParam}},
-        rules => [{{#isString}}
-            {type, 'binary'},{{/isString}}{{#isInteger}}
-            {type, 'integer'},{{/isInteger}}{{#isLong}}
-            {type, 'integer'},{{/isLong}}{{#isFloat}}
-            {type, 'float'},{{/isFloat}}{{#isDouble}}
-            {type, 'float'},{{/isDouble}}{{#isByteArray}}
-            {type, 'binary'},{{/isByteArray}}{{#isBinary}}
-            {type, 'binary'},{{/isBinary}}{{#isBoolean}}
-            {type, 'boolean'},{{/isBoolean}}{{#isDate}}
-            {type, 'date'},{{/isDate}}{{#isDateTime}}
-            {type, 'datetime'},{{/isDateTime}}{{#isEnum}}
-            {enum, [{{#allowableValues}}{{#values}}'{{.}}'{{^-last}}, {{/-last}}{{/values}}{{/allowableValues}}] },{{/isEnum}}{{#maximum}}
-            {max, {{maximum}} }, {{/maximum}}{{#exclusiveMaximum}}
-            {exclusive_max, {{exclusiveMaximum}} },{{/exclusiveMaximum}}{{#minimum}}
-            {min, {{minimum}} },{{/minimum}}{{#exclusiveMinimum}}
-            {exclusive_min, {{exclusiveMinimum}} },{{/exclusiveMinimum}}{{#maxLength}}
-            {max_length, {{maxLength}} },{{/maxLength}}{{#minLength}}
-            {min_length, {{minLength}} },{{/minLength}}{{#pattern}}
-            {pattern, "{{{pattern}}}" },{{/pattern}}{{#isBodyParam}}
-            schema,{{/isBodyParam}}{{#required}}
-            required{{/required}}{{^required}}
-            not_required{{/required}}
-        ]
+        rules => {{#isListContainer}}[{list, '{{collectionFormat}}', {{#items}}[{{>api.param_info}}]{{/items}}}, {{>api.param_info}}]{{/isListContainer}}{{^isListContainer}}[{{>api.param_info}}]{{/isListContainer}}
     };
 {{/allParams}}{{/operation}}{{/operations}}{{/apis}}{{/apiInfo}}
 request_param_info(OperationID, Name) ->
@@ -140,14 +118,12 @@ validate_response_body(_, ReturnBaseType, Body, ValidatorState) ->
     validate(schema, ReturnBaseType, Body, ValidatorState).
 
 %%%
-validate(Rule = required, Name, Value, _ValidatorState) ->
+
+validate(Rule = {required, Req}, Name, Value, _ValidatorState) ->
     case Value of
-        undefined -> validation_error(Rule, Name);
+        undefined when Req -> validation_error(Rule, Name);
         _ -> ok
     end;
-
-validate(not_required, _Name, _Value, _ValidatorState) ->
-    ok;
 
 validate(_, _Name, undefined, _ValidatorState) ->
     ok;
@@ -256,6 +232,15 @@ validate(Rule = {pattern, Pattern}, Name, Value, _ValidatorState) ->
         _ -> validation_error(Rule, Name)
     end;
 
+validate(Rule = {list, Format, Ruleset}, Name, Value, ValidatorState) ->
+    try
+        Values = parse_collection_value(Format, Value),
+        {ok, [validate_param(Ruleset, Name, V, ValidatorState) || V <- Values]}
+    catch
+        error:badarg ->
+            validation_error(Rule, Name)
+    end;
+
 validate(Rule = schema, Name, Value, ValidatorState) ->
     Definition =  list_to_binary("#/definitions/" ++ {{packageName}}_utils:to_list(Name)),
     try
@@ -281,6 +266,20 @@ validate(Rule = schema, Name, Value, ValidatorState) ->
 validate(Rule, Name, _Value, _ValidatorState) ->
     error_logger:info_msg("Can't validate ~p with ~p", [Name, Rule]),
     error({unknown_validation_rule, Rule}).
+
+-spec parse_collection_value(Format :: 'csv' | 'ssv' | 'tsv' | 'pipes', binary()) -> Values :: [binary()].
+
+parse_collection_value(Format, Collection) ->
+    binary:split(Collection, get_split_pattern(Format), [global]).
+
+get_split_pattern('csv') ->
+    <<",">>;
+get_split_pattern('ssv') ->
+    <<" ">>;
+get_split_pattern('tsv') ->
+    <<"\t">>;
+get_split_pattern('pipes') ->
+    <<"|">>.
 
 -spec validation_error(Rule :: any(), Name :: any()) -> no_return().
 
@@ -327,19 +326,21 @@ validate_with_schema(Body, Definition, ValidatorState) ->
         ValidatorState
     ).
 
+validate_param(Rules, Name, Value, ValidatorState) ->
+    lists:foldl(
+        fun(Rule, Acc) ->
+            case validate(Rule, Name, Acc, ValidatorState) of
+                ok -> Acc;
+                {ok, Prepared} -> Prepared
+            end
+        end,
+        Value,
+        Rules
+    ).
+
 prepare_param(Rules, Name, Value, ValidatorState) ->
     try
-        Result = lists:foldl(
-            fun(Rule, Acc) ->
-                case validate(Rule, Name, Acc, ValidatorState) of
-                    ok -> Acc;
-                    {ok, Prepared} -> Prepared
-                end
-            end,
-            Value,
-            Rules
-        ),
-        {ok, Result}
+        {ok, validate_param(Rules, Name, Value, ValidatorState)}
     catch
         throw:Reason ->
             {error, Reason}
