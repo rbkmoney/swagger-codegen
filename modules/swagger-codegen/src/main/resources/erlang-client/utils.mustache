@@ -1,0 +1,12 @@
+-module(utils).
+
+-define(CAPI_HOST, "0.0.0.0").
+-define(CAPI_PORT, 8080).
+
+-type url() :: hackney:hackney_url().
+
+-export(get_url).
+
+-spec get_url(Path::string()) -> url().
+get_url(Path) ->
+    ?CAPI_HOST ++ ":" ++ integer_to_list(?CAPI_PORT)  ++ Path.

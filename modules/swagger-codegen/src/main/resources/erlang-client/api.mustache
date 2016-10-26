@@ -1,0 +1,19 @@
+-module({{classname}}).
+
+%% generated methods
+{{#operations}}{{#operation}}-export([{{operationId}}/3]).
+{{/operation}}{{/operations}}
+
+-type client_ref() :: term().
+
+{{#operations}}{{#operation}}
+-spec {{operationId}}(Headers::list(), Body::term()) ->
+  {ok, integer(), list(), client_ref()} | {ok, integer(), list()} | {error, term()}.
+
+{{operationId}}(Body, Headers) ->
+  Url = get_url({{basePathWithoutHost}}{{path}}),
+  PreparedBody = jsx:encode(Body),
+
+  {ok, Code, RespHeaders, ClientRef} = hackney:request({{httpMethod}}, Url, Headers, PreparedBody),
+  {ok, Code, RespHeaders, ClientRef}.
+{{/operation}}{{/operations}}

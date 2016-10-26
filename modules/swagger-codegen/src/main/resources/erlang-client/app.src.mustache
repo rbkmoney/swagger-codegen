@@ -1,0 +1,15 @@
+{application, {{packageName}}, [
+    {description, {{#appDescription}}"{{appDescription}}"{{/appDescription}}{{^appDescription}}"Swagger rest server library"{{/appDescription}}},
+    {vsn, "{{apiVersion}}"},
+    {registered, []},
+    {applications, [
+        kernel,
+        stdlib,
+        jsx,
+    ]},
+    {env, [
+    ]},
+    {modules, []},
+    {licenses, [{{#licenseInfo}}"{{licenseInfo}}"{{/licenseInfo}}]},
+    {links, [{{#infoUrl}}"{{infoUrl}}"{{/infoUrl}}]}
+]}.
