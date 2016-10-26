@@ -126,14 +126,12 @@ validate_response_body(_, ReturnBaseType, Body, ValidatorState) ->
     validate(schema, ReturnBaseType, Body, ValidatorState).
 
 %%%
-validate(Rule = required, Name, Value, _ValidatorState) ->
+
+validate(Rule = {required, Req}, Name, Value, _ValidatorState) ->
     case Value of
-        undefined -> validation_error(Rule, Name);
+        undefined when Req -> validation_error(Rule, Name);
         _ -> ok
     end;
-
-validate(not_required, _Name, _Value, _ValidatorState) ->
-    ok;
 
 validate(_, _Name, undefined, _ValidatorState) ->
     ok;
