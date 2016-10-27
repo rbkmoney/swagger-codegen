@@ -3,17 +3,13 @@
 %% generated methods
 {{#operations}}{{#operation}}-export([{{operationId}}/3]).
 {{/operation}}{{/operations}}
-
--type client_ref() :: term().
-
 {{#operations}}{{#operation}}
--spec {{operationId}}(Headers::list(), Body::term()) ->
-  {ok, integer(), list(), client_ref()} | {ok, integer(), list()} | {error, term()}.
-
-{{operationId}}(Body, Headers) ->
-  Url = get_url({{basePathWithoutHost}}{{path}}),
+-spec {{operationId}}(Body::term(), Headers::list(), Params::term()) ->
+  {ok, integer(), list(), {ok, binary()}}.
+{{operationId}}(Body, Headers, Params) ->
+  Url = swagger_utils:get_url("{{basePathWithoutHost}}{{path}}"),
   PreparedBody = jsx:encode(Body),
+  FilledUrl = swagger_utils:fill_url(Url, Params),
 
-  {ok, Code, RespHeaders, ClientRef} = hackney:request({{httpMethod}}, Url, Headers, PreparedBody),
-  {ok, Code, RespHeaders, ClientRef}.
+  hackney:request({{httpMethod}}, Url, Headers, PreparedBody, [with_body]).
 {{/operation}}{{/operations}}

@@ -93,7 +93,7 @@ public class ErlangClientCodegen extends DefaultCodegen implements CodegenConfig
          * entire object tree available.  If the input file has a suffix of `.mustache
          * it will be processed by the template engine.  Otherwise, it will be copied
          */
-        supportingFiles.add(new SupportingFile("utils.mustache", "utils.erl"));
+        supportingFiles.add(new SupportingFile("utils.mustache", "", toSourceFilePath("utils", "erl")));
     }
 
     @Override
