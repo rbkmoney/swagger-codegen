@@ -40,7 +40,7 @@ init(_Transport, Req, Opts) ->
 
 rest_init(Req0, {Operations, LogicHandler, ValidatorState}) ->
     {Method, Req1} = cowboy_req:method(Req0),
-    {{IP, Port}, Req2} = cowboy_req:peer(Req1),
+    {{IP, Port}, Req2} = deduce_peer(Req1),
     OperationID = maps:get(Method, Operations, undefined),
 
     error_logger:info_msg("Attempt to process operation: ~p", [OperationID]),
@@ -60,6 +60,44 @@ rest_init(Req0, {Operations, LogicHandler, ValidatorState}) ->
     },
 
     {ok, Req2, State}.
+
+-spec deduce_peer(cowboy_req:req()) ->
+    cowboy_req:req().
+
+deduce_peer(Req) ->
+    {Peer, Req1} = cowboy_req:peer(Req),
+    {Value, Req2} = cowboy_req:header(<<"x-real-ip">>, Req1, <<>>),
+    ClientPeer = string:strip(binary_to_list(Value)),
+    {case string:rchr(ClientPeer, $:) of
+        S when S > 0 ->
+            {ClientIP, [_ | ClientPort]} = lists:split(S - 1, ClientPeer),
+            case {parse_ip(ClientIP), parse_port(ClientPort)} of
+                {{ok, ParsedIP}, {ok, ParsedPort}} ->
+                    % ok
+                    {ParsedIP, ParsedPort};
+                _ ->
+                    % unparseable header value
+                    Peer
+            end;
+        0 ->
+            % empty or malformed value
+            Peer
+    end, Req2}.
+
+parse_ip([$[ | IP]) ->
+    inet:parse_ipv6_address(lists:droplast(IP));
+parse_ip(IP) ->
+    inet:parse_ipv4_address(IP).
+
+parse_port(Port) when length(Port) > 0 ->
+    case list_to_integer(Port) of
+        V when V > 0 andalso V < 65536 ->
+            {ok, V};
+        _ ->
+            {error, einval}
+    end;
+parse_port(_) ->
+    {error, einval}.
 
 -spec allowed_methods(Req :: cowboy_req:req(), State :: state()) ->
     {Value :: [binary()], Req :: cowboy_req:req(), State :: state()}.
