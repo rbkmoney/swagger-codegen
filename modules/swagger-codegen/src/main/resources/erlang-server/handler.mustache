@@ -169,7 +169,7 @@ malformed_request(Req, State) ->
     end.
 
 -spec determine_peer(cowboy_req:req()) ->
-    {{ok, {{packageName}}_api:client_peer()} | {error, invalid}, cowboy_req:req()}.
+    {{ok, {{packageName}}_api:client_peer()} | {error, malformed | einval}, cowboy_req:req()}.
 
 determine_peer(Req) ->
     {Peer, Req1} = cowboy_req:peer(Req),
