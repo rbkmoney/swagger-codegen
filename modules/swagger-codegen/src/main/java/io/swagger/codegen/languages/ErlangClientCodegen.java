@@ -55,7 +55,7 @@ public class ErlangClientCodegen extends DefaultCodegen implements CodegenConfig
          * class
          */
         apiTemplateFiles.put(
-            "api.mustache",   // the template to use
+            "client_api.mustache",   // the template to use
             ".erl");       // the extension for each file to write
 
         /**
@@ -73,33 +73,33 @@ public class ErlangClientCodegen extends DefaultCodegen implements CodegenConfig
                 "catch","cond","div","end","fun","if","let","not","of","or","orelse","receive",
                 "rem","try","when","xor"
             )
-       );
-       
-       instantiationTypes.clear();
+        );
 
-       typeMapping.clear();
-       typeMapping.put("enum", "binary");
-       typeMapping.put("date", "date");
-       typeMapping.put("datetime", "datetime");
-       typeMapping.put("boolean", "boolean");
-       typeMapping.put("string", "binary");
-       typeMapping.put("integer", "integer");
-       typeMapping.put("int", "integer");
-       typeMapping.put("float", "integer");
-       typeMapping.put("long", "integer");
-       typeMapping.put("double", "float");
-       typeMapping.put("array", "list");
-       typeMapping.put("map", "map");
-       typeMapping.put("number", "integer");
-       typeMapping.put("bigdecimal", "float");
-       typeMapping.put("List", "list");
-       typeMapping.put("object", "object");
-       typeMapping.put("file", "file");
-       typeMapping.put("binary", "binary");
-       typeMapping.put("bytearray", "binary");
-       typeMapping.put("byte", "binary");
-       typeMapping.put("uuid", "binary");
-       typeMapping.put("password", "binary");
+        instantiationTypes.clear();
+
+        typeMapping.clear();
+        typeMapping.put("enum", "binary");
+        typeMapping.put("date", "date");
+        typeMapping.put("datetime", "datetime");
+        typeMapping.put("boolean", "boolean");
+        typeMapping.put("string", "binary");
+        typeMapping.put("integer", "integer");
+        typeMapping.put("int", "integer");
+        typeMapping.put("float", "integer");
+        typeMapping.put("long", "integer");
+        typeMapping.put("double", "float");
+        typeMapping.put("array", "list");
+        typeMapping.put("map", "map");
+        typeMapping.put("number", "integer");
+        typeMapping.put("bigdecimal", "float");
+        typeMapping.put("List", "list");
+        typeMapping.put("object", "object");
+        typeMapping.put("file", "file");
+        typeMapping.put("binary", "binary");
+        typeMapping.put("bytearray", "binary");
+        typeMapping.put("byte", "binary");
+        typeMapping.put("uuid", "binary");
+        typeMapping.put("password", "binary");
 
         cliOptions.clear();
         cliOptions.add(new CliOption(CodegenConstants.PACKAGE_NAME, "Erlang package name (convention: lowercase).")
@@ -115,7 +115,9 @@ public class ErlangClientCodegen extends DefaultCodegen implements CodegenConfig
          * entire object tree available.  If the input file has a suffix of `.mustache
          * it will be processed by the template engine.  Otherwise, it will be copied
          */
-        supportingFiles.add(new SupportingFile("api_utils.mustache", "", toSourceFilePath("api_utils", "erl")));
+        supportingFiles.add(new SupportingFile("client_api_utils.mustache", "", toSourceFilePath("client_api_utils", "erl")));
+        supportingFiles.add(new SupportingFile("client_api_validation.mustache", "", toSourceFilePath("client_api_validation", "erl")));
+        supportingFiles.add(new SupportingFile("client_api_procession.mustache", "", toSourceFilePath("client_api_procession", "erl")));
     }
 
     @Override
