@@ -1,35 +1,36 @@
 -module({{packageName}}_client_api_procession).
 
--type operation_id() :: atom().
-
 -record(state, {
     operation_id :: operation_id(),
     validator_state :: jesse_state:state()
 }).
 
--type state() :: state().
+-type operation_id() :: {{packageName}}_client_api_validation:operation_id().
+-type state() :: #state{}.
+-type params() :: #{header => any(), binding => any(), body => any(), qs_val => any()}.
 
 -export([process_request/4]).
 
--spec process_request(Method::atom(), OperationID::atom(), Url::string(), Params::map()) ->
-    {ok, integer(), list(), {ok, binary()}}.
+-spec process_request(Method::atom(), OperationID::operation_id(), Url::string(), Params::params()) ->
+    {ok, Code::integer(), RespHeaders::list(), {ok, binary()}}.
 process_request(Method, OperationID, Url, Params) ->
     State = #state{
         operation_id = OperationID,
         validator_state = prepare_validator()
     },
 
-    {PreparedUrlParams, PreparedHeaderParams, PreparedBodyParams, PreparedQueryParams} =
-        handle_request_json(Params, State),
+    case handle_request_json(Params, State) of
+        {ok, PreparedUrlParams, PreparedHeaderParams, PreparedBodyParams, PreparedQueryParams} ->
+            PreparedUrl = prepare_url(Url, PreparedUrlParams, PreparedQueryParams),
+            PreparedHeaders = maps:to_list(PreparedHeaderParams),
+            PreparedBody = jsx:encode(PreparedBodyParams),
+            hackney:request(Method, PreparedUrl, PreparedHeaders, PreparedBody, [with_body]);
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
-    #{} = PreparedQueryParams,
-    PreparedUrl = prepare_url(Url, PreparedUrlParams, PreparedQueryParams),
-    PreparedHeaders = maps:to_list(PreparedHeaderParams),
-    PreparedBody = jsx:encode(PreparedBodyParams),
-
-    hackney:request(Method, PreparedUrl, PreparedHeaders, PreparedBody, [with_body]).
-
--spec handle_request_json(term(), state()) -> {ok, map(), map(), map(), map()} | {error, term()}.
+-spec handle_request_json(RequestParams::params(), State::state()) ->
+    {ok, UrlParams::map(), HeaderParams::map(), BodyParams::map(), QueryParams::map()} | {error, term()}.
 handle_request_json(
     RequestParams,
     _State = #state{
@@ -39,20 +40,20 @@ handle_request_json(
 ) ->
     case populate_request(OperationID, RequestParams, ValidatorState) of
         {ok, Params} ->
-            {maps:get(binding, Params), maps:get(header, Params), maps:get(body, Params), maps:get(qs_val, Params)};
+            {ok, maps:get(binding, Params), maps:get(header, Params), maps:get(body, Params), maps:get(qs_val, Params)};
         {error, Reason, _} ->
             {error, Reason}
     end.
 
 -spec populate_request(
-    OperationID :: term(),
+    OperationID :: operation_id(),
     RequestParams :: term(),
     ValidatorState :: jesse_state:state()
 ) ->
     {ok, Params :: map()} |
     {error, Reason :: any(), Req :: term()}.
 populate_request(OperationID, RequestParams, ValidatorState) ->
-    Params = swagger_client_api_validation:request_params(OperationID),
+    Params = {{packageName}}_client_api_validation:request_params(OperationID),
     populate_request_params(OperationID, Params, RequestParams, ValidatorState).
 
 populate_request_params(_, [], RequestParams, _) ->
@@ -60,19 +61,17 @@ populate_request_params(_, [], RequestParams, _) ->
 populate_request_params(OperationID, [FieldParams | T], RequestParams, ValidatorState) ->
     case populate_request_param(OperationID, FieldParams, RequestParams, ValidatorState) of
         {ok, _K, _V, RequestParams} ->
-            % populate_request_params(OperationID, T, genlib_map:deepput(swagger_client_api_utils:to_binary(K), V, RequestParams), ValidatorState);
             populate_request_params(OperationID, T, RequestParams, ValidatorState);
         Error ->
             Error
     end.
 
 populate_request_param(OperationID, Name, RequestParams0, ValidatorState) ->
-    #{rules := Rules, source := Source} = swagger_client_api_validation:request_param_info(OperationID, Name),
+    #{rules := Rules, source := Source} = {{packageName}}_client_api_validation:request_param_info(OperationID, Name),
     {Value, RequestParams} = get_value(Source, Name, RequestParams0),
     case prepare_param(Rules, Name, Value, ValidatorState) of
         {ok, Result} -> {ok, Name, Result, RequestParams};
         {error, Reason} ->
-            % {ok, ok, ok, ok, ok} = {Source, swagger_client_api_utils:to_binary(Name), Value, RequestParams, Reason},
             {error, Reason, RequestParams0}
     end.
 
@@ -80,7 +79,7 @@ prepare_param(Rules, Name, Value, ValidatorState) ->
     try
         Result = lists:foldl(
             fun(Rule, Acc) ->
-                case swagger_client_api_validation:validate(Rule, swagger_client_api_utils:to_binary(Name), Acc, ValidatorState) of
+                case {{packageName}}_client_api_validation:validate(Rule, {{packageName}}_client_api_utils:to_binary(Name), Acc, ValidatorState) of
                     ok -> Acc;
                     {ok, Prepared} -> Prepared
                 end
@@ -101,27 +100,26 @@ prepare_validator() ->
 
 get_swagger_path() ->
     {ok, AppName} = application:get_application(?MODULE),
-    filename:join(swagger_client_api_utils:priv_dir(AppName), "swagger.json").
+    filename:join({{packageName}}_client_api_utils:priv_dir(AppName), "swagger.json").
 
 -spec get_value(atom(), term(), term()) -> term().
 get_value(body, _Name, RequestParams) ->
-    Body = maps:get(body, RequestParams),
-    Value = Body,
+    Value = maps:get(body, RequestParams),
     {Value, RequestParams};
 
 get_value(qs_val, Name, RequestParams) ->
     QueryParams = maps:get(qs_val, RequestParams),
-    Value = get_opt(swagger_client_api_utils:to_binary(Name), QueryParams),
+    Value = get_opt({{packageName}}_client_api_utils:to_binary(Name), QueryParams),
     {Value, RequestParams};
 
 get_value(header, Name, RequestParams) ->
     HeaderParams = maps:get(header, RequestParams, #{}),
-    Value = get_opt(swagger_client_api_utils:to_binary(Name), HeaderParams),
+    Value = get_opt({{packageName}}_client_api_utils:to_binary(Name), HeaderParams),
     {Value, RequestParams};
 
 get_value(binding, Name, RequestParams) ->
     BindingParams = maps:get(binding, RequestParams, #{}),
-    Value = get_opt(swagger_client_api_utils:to_binary(Name), BindingParams),
+    Value = get_opt({{packageName}}_client_api_utils:to_binary(Name), BindingParams),
     {Value, RequestParams}.
 
 
@@ -133,4 +131,4 @@ get_opt(Key, Opts, Default) ->
 
 
 prepare_url(Url, Params, Qs) ->
-    swagger_client_api_utils:fill_url(Url, Params, Qs).
+    {{packageName}}_client_api_utils:fill_url(Url, Params, Qs).

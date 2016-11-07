@@ -8,19 +8,12 @@
 -type operation_id() :: atom().
 -type request_param() :: atom().
 
-
--type request_context() :: #{
-    auth_context => AuthContext :: swagger_auth:context(),
-    peer => client_peer()
-}.
-
 -type client_peer() :: #{
     ip_address => IP :: inet:ip_address(),
     port_number => Port :: inet:port_number()
 }.
 
 -export_type([operation_id/0]).
--export_type([request_context/0]).
 -export_type([client_peer/0]).
 
 -spec request_params(OperationID :: operation_id()) -> [Param :: request_param()].
@@ -75,7 +68,7 @@ request_param_info('{{operationId}}', {{^isBodyParam}}'{{baseName}}'{{/isBodyPar
 request_param_info(OperationID, Name) ->
     error({unknown_param, OperationID, Name}).
 %%%
--spec validate(term(),term(),term(),term()) -> term().
+-spec validate(tuple(),term(),term(),term()) -> ok | no_return().
 validate(Rule = {required, true}, Name, Value, _ValidatorState) ->
     case Value of
         undefined -> validation_error(Rule, Name);
@@ -90,7 +83,7 @@ validate(_, _Name, undefined, _ValidatorState) ->
 
 validate(Rule = {type, 'integer'}, Name, Value, _ValidatorState) ->
     try
-        {ok, swagger_utils:to_int(Value)}
+        {ok, {{packageName}}_client_api_utils:to_int(Value)}
     catch
         error:badarg ->
             validation_error(Rule, Name)
@@ -98,7 +91,7 @@ validate(Rule = {type, 'integer'}, Name, Value, _ValidatorState) ->
 
 validate(Rule = {type, 'float'}, Name, Value, _ValidatorState) ->
     try
-        {ok, swagger_utils:to_float(Value)}
+        {ok, {{packageName}}_client_api_utils:to_float(Value)}
     catch
         error:badarg ->
             validation_error(Rule, Name)
@@ -192,58 +185,54 @@ validate(Rule = {pattern, Pattern}, Name, Value, _ValidatorState) ->
         _ -> validation_error(Rule, Name)
     end;
 
-% validate(Rule = {list, Format, Ruleset}, Name, Value, ValidatorState) ->
-%     try
-%         Values = parse_collection_value(Format, Value),
-%         {ok, [validate_param(Ruleset, Name, V, ValidatorState) || V <- Values]}
-%     catch
-%         error:badarg ->
-%             validation_error(Rule, Name)
-%     end;
+validate(Rule = {list, Format, Ruleset}, Name, Value, ValidatorState) ->
+    try
+        Values = parse_collection_value(Format, Value),
+        {ok, [validate_param(Ruleset, Name, V, ValidatorState) || V <- Values]}
+    catch
+        error:badarg ->
+            validation_error(Rule, Name)
+    end;
 
-% validate(Rule = schema, Name, Value, ValidatorState) ->
-%     Definition =  list_to_binary("#/definitions/" ++ swagger_utils:to_list(Name)),
-%     try
-%         _ = validate_with_schema(Value, Definition, ValidatorState),
-%         ok
-%     catch
-%         throw:[{schema_invalid, _, Error} | _] ->
-%             Info = #{
-%                 type => schema_invalid,
-%                 error => Error
-%             },
-%             validation_error(Rule, Name, Info);
-%         throw:[{data_invalid, Schema, Error, _, Path} | _] ->
-%             Info = #{
-%                 type => data_invalid,
-%                 error => Error,
-%                 schema => Schema,
-%                 path => Path
-%             },
-%             validation_error(Rule, Name, Info)
-%     end;
-validate(_Rule = {list, _Format, _Ruleset}, _, _, _) ->
-    ok;
-validate(_Rule = schema, _, _ , _) ->
-    ok;
+validate(Rule = schema, Name, Value, ValidatorState) ->
+    Definition =  list_to_binary("#/definitions/" ++ swagger_utils:to_list(Name)),
+    try
+        _ = validate_with_schema(Value, Definition, ValidatorState),
+        ok
+    catch
+        throw:[{schema_invalid, _, Error} | _] ->
+            Info = #{
+                type => schema_invalid,
+                error => Error
+            },
+            validation_error(Rule, Name, Info);
+        throw:[{data_invalid, Schema, Error, _, Path} | _] ->
+            Info = #{
+                type => data_invalid,
+                error => Error,
+                schema => Schema,
+                path => Path
+            },
+            validation_error(Rule, Name, Info)
+    end;
 
 validate(Rule, Name, _Value, _ValidatorState) ->
     error_logger:info_msg("Can't validate ~p with ~p", [Name, Rule]),
     error({unknown_validation_rule, Rule}).
 
-% -spec parse_collection_value(Format :: 'csv' | 'ssv' | 'tsv' | 'pipes', binary()) -> Values :: [binary()].
-%
-% parse_collection_value(Format, Collection) ->
-%     binary:split(Collection, get_split_pattern(Format), [global]).
-%
-% get_split_pattern('csv') ->
-%     <<",">>;
-% get_split_pattern('ssv') ->
-%     <<" ">>;
-% get_split_pattern('tsv') ->
-%     <<"\t">>;
-% get_split_pattern('pipes') ->
-%     <<"|">>.
+-spec parse_collection_value(Format :: 'csv' | 'ssv' | 'tsv' | 'pipes', binary()) -> Values :: [binary()].
+
+parse_collection_value(Format, Collection) ->
+    binary:split(Collection, get_split_pattern(Format), [global]).
+
+get_split_pattern('csv') ->
+    <<",">>;
+get_split_pattern('ssv') ->
+    <<" ">>;
+get_split_pattern('tsv') ->
+    <<"\t">>;
+get_split_pattern('pipes') ->
+    <<"|">>.
 
 -spec validation_error(Rule :: any(), Name :: any()) -> no_return().
 
@@ -262,24 +251,24 @@ prepare_body(Body) ->
         _ -> jsx:decode(Body, [return_maps])
     end.
 
-% validate_with_schema(Body, Definition, ValidatorState) ->
-%     jesse_schema_validator:validate_with_state(
-%         [{<<"$ref">>, Definition}],
-%         Body,
-%         ValidatorState
-%     ).
+validate_with_schema(Body, Definition, ValidatorState) ->
+    jesse_schema_validator:validate_with_state(
+        [{<<"$ref">>, Definition}],
+        Body,
+        ValidatorState
+    ).
 
 binary_to_lower(V) when is_binary(V) ->
-    list_to_binary(string:to_lower(swagger_utils:to_list(V))).
+    list_to_binary(string:to_lower({{packageName}}_client_api_utils:to_list(V))).
 
-% validate_param(Rules, Name, Value, ValidatorState) ->
-%     lists:foldl(
-%         fun(Rule, Acc) ->
-%             case validate(Rule, Name, Acc, ValidatorState) of
-%                 ok -> Acc;
-%                 {ok, Prepared} -> Prepared
-%             end
-%         end,
-%         Value,
-%         Rules
-%     ).
+validate_param(Rules, Name, Value, ValidatorState) ->
+    lists:foldl(
+        fun(Rule, Acc) ->
+            case validate(Rule, Name, Acc, ValidatorState) of
+                ok -> Acc;
+                {ok, Prepared} -> Prepared
+            end
+        end,
+        Value,
+        Rules
+    ).
