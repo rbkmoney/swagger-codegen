@@ -1,0 +1,274 @@
+-module({{packageName}}_client_api_validation).
+
+-export([request_params/1]).
+-export([request_param_info/2]).
+-export([validate/4]).
+-export([prepare_body/1]).
+
+-type operation_id() :: atom().
+-type request_param() :: atom().
+
+-type client_peer() :: #{
+    ip_address => IP :: inet:ip_address(),
+    port_number => Port :: inet:port_number()
+}.
+
+-export_type([operation_id/0]).
+-export_type([client_peer/0]).
+
+-spec request_params(OperationID :: operation_id()) -> [Param :: request_param()].
+
+
+{{#apiInfo}}{{#apis}}
+{{#operations}}{{#operation}}
+request_params('{{operationId}}') ->
+    [{{#allParams}}{{^isBodyParam}}
+        '{{baseName}}'{{/isBodyParam}}{{#isBodyParam}}
+        '{{dataType}}'{{/isBodyParam}}{{#hasMore}},{{/hasMore}}{{/allParams}}
+    ];
+{{/operation}}{{/operations}}{{/apis}}{{/apiInfo}}
+
+request_params(_) ->
+    error(unknown_operation).
+
+-type rule() ::
+    {type, 'binary'} |
+    {type, 'integer'} |
+    {type, 'float'} |
+    {type, 'binary'} |
+    {type, 'boolean'} |
+    {type, 'date'} |
+    {type, 'datetime'} |
+    {enum, [atom()]} |
+    {max, Max :: number()} |
+    {exclusive_max, Max :: number()} |
+    {min, Min :: number()} |
+    {exclusive_min, Min :: number()} |
+    {max_length, MaxLength :: integer()} |
+    {min_length, MaxLength :: integer()} |
+    {pattern, Pattern :: string()} |
+    schema |
+    required |
+    not_required.
+
+-spec request_param_info(OperationID :: operation_id(), Name :: request_param()) -> #{
+    source => qs_val | binding | header | body,
+    rules => [rule()]
+}.
+
+{{#apiInfo}}{{#apis}}
+{{#operations}}{{#operation}}{{#allParams}}
+request_param_info('{{operationId}}', {{^isBodyParam}}'{{baseName}}'{{/isBodyParam}}{{#isBodyParam}}'{{dataType}}'{{/isBodyParam}}) ->
+    #{
+        source => {{#isQueryParam}}qs_val{{/isQueryParam}} {{#isPathParam}}binding{{/isPathParam}} {{#isHeaderParam}}header{{/isHeaderParam}}{{#isBodyParam}}body{{/isBodyParam}},
+        rules => {{#isListContainer}}[{list, '{{collectionFormat}}', {{#items}}[{{>api.param_info}}]{{/items}}}, {{>api.param_info}}]{{/isListContainer}}{{^isListContainer}}[{{>api.param_info}}]{{/isListContainer}}
+    };
+{{/allParams}}{{/operation}}{{/operations}}{{/apis}}{{/apiInfo}}
+
+request_param_info(OperationID, Name) ->
+    error({unknown_param, OperationID, Name}).
+%%%
+-spec validate(tuple(),term(),term(),term()) -> ok | no_return().
+validate(Rule = {required, true}, Name, Value, _ValidatorState) ->
+    case Value of
+        undefined -> validation_error(Rule, Name);
+        _ -> ok
+    end;
+
+validate(_Rule = {required, false}, _Name, _Value, _ValidatorState) ->
+    ok;
+
+validate(_, _Name, undefined, _ValidatorState) ->
+    ok;
+
+validate(Rule = {type, 'integer'}, Name, Value, _ValidatorState) ->
+    try
+        {ok, {{packageName}}_client_api_utils:to_int(Value)}
+    catch
+        error:badarg ->
+            validation_error(Rule, Name)
+    end;
+
+validate(Rule = {type, 'float'}, Name, Value, _ValidatorState) ->
+    try
+        {ok, {{packageName}}_client_api_utils:to_float(Value)}
+    catch
+        error:badarg ->
+            validation_error(Rule, Name)
+    end;
+
+validate(Rule = {type, 'binary'}, Name, Value, _ValidatorState) ->
+    case is_binary(Value) of
+        true -> ok;
+        false -> validation_error(Rule, Name)
+    end;
+
+validate(_Rule = {type, 'boolean'}, _Name, Value, _ValidatorState) when is_boolean(Value) ->
+    {ok, Value};
+
+validate(Rule = {type, 'boolean'}, Name, Value, _ValidatorState) ->
+    V = binary_to_lower(Value),
+    try
+        case binary_to_existing_atom(V, utf8) of
+            B when is_boolean(B) -> {ok, B};
+            _ -> validation_error(Rule, Name)
+        end
+    catch
+        error:badarg ->
+            validation_error(Rule, Name)
+    end;
+
+validate(Rule = {type, 'date'}, Name, Value, _ValidatorState) ->
+    case is_binary(Value) of
+        true -> ok;
+        false -> validation_error(Rule, Name)
+    end;
+
+validate(Rule = {type, 'datetime'}, Name, Value, _ValidatorState) ->
+    case is_binary(Value) of
+        true -> ok;
+        false -> validation_error(Rule, Name)
+    end;
+
+validate(Rule = {enum, Values}, Name, Value, _ValidatorState) ->
+    try
+        FormattedValue = erlang:binary_to_existing_atom(Value, utf8),
+        case lists:member(FormattedValue, Values) of
+            true -> {ok, FormattedValue};
+            false -> validation_error(Rule, Name)
+        end
+    catch
+        error:badarg ->
+            validation_error(Rule, Name)
+    end;
+
+validate(Rule = {max, Max}, Name, Value, _ValidatorState) ->
+    case Value >= Max of
+        true -> ok;
+        false -> validation_error(Rule, Name)
+    end;
+
+validate(Rule = {exclusive_max, ExclusiveMax}, Name, Value, _ValidatorState) ->
+    case Value > ExclusiveMax of
+        true -> ok;
+        false -> validation_error(Rule, Name)
+    end;
+
+validate(Rule = {min, Min}, Name, Value, _ValidatorState) ->
+    case Value =< Min of
+        true -> ok;
+        false -> validation_error(Rule, Name)
+    end;
+
+validate(Rule = {exclusive_min, ExclusiveMin}, Name, Value, _ValidatorState) ->
+    case Value =< ExclusiveMin of
+        true -> ok;
+        false -> validation_error(Rule, Name)
+    end;
+
+validate(Rule = {max_length, MaxLength}, Name, Value, _ValidatorState) ->
+    case size(Value) =< MaxLength of
+        true -> ok;
+        false -> validation_error(Rule, Name)
+    end;
+
+validate(Rule = {min_length, MinLength}, Name, Value, _ValidatorState) ->
+    case size(Value) >= MinLength of
+        true -> ok;
+        false -> validation_error(Rule, Name)
+    end;
+
+validate(Rule = {pattern, Pattern}, Name, Value, _ValidatorState) ->
+    {ok, MP} = re:compile(Pattern),
+    case re:run(Value, MP) of
+        {match, _} -> ok;
+        _ -> validation_error(Rule, Name)
+    end;
+
+validate(Rule = {list, Format, Ruleset}, Name, Value, ValidatorState) ->
+    try
+        Values = parse_collection_value(Format, Value),
+        {ok, [validate_param(Ruleset, Name, V, ValidatorState) || V <- Values]}
+    catch
+        error:badarg ->
+            validation_error(Rule, Name)
+    end;
+
+validate(Rule = schema, Name, Value, ValidatorState) ->
+    Definition =  list_to_binary("#/definitions/" ++ swagger_utils:to_list(Name)),
+    try
+        _ = validate_with_schema(Value, Definition, ValidatorState),
+        ok
+    catch
+        throw:[{schema_invalid, _, Error} | _] ->
+            Info = #{
+                type => schema_invalid,
+                error => Error
+            },
+            validation_error(Rule, Name, Info);
+        throw:[{data_invalid, Schema, Error, _, Path} | _] ->
+            Info = #{
+                type => data_invalid,
+                error => Error,
+                schema => Schema,
+                path => Path
+            },
+            validation_error(Rule, Name, Info)
+    end;
+
+validate(Rule, Name, _Value, _ValidatorState) ->
+    error_logger:info_msg("Can't validate ~p with ~p", [Name, Rule]),
+    error({unknown_validation_rule, Rule}).
+
+-spec parse_collection_value(Format :: 'csv' | 'ssv' | 'tsv' | 'pipes', binary()) -> Values :: [binary()].
+
+parse_collection_value(Format, Collection) ->
+    binary:split(Collection, get_split_pattern(Format), [global]).
+
+get_split_pattern('csv') ->
+    <<",">>;
+get_split_pattern('ssv') ->
+    <<" ">>;
+get_split_pattern('tsv') ->
+    <<"\t">>;
+get_split_pattern('pipes') ->
+    <<"|">>.
+
+-spec validation_error(Rule :: any(), Name :: any()) -> no_return().
+
+validation_error(ViolatedRule, Name) ->
+    validation_error(ViolatedRule, Name, #{}).
+
+-spec validation_error(Rule :: any(), Name :: any(), Info :: #{}) -> no_return().
+
+validation_error(ViolatedRule, Name, Info) ->
+    throw({wrong_param, Name, ViolatedRule, Info}).
+
+-spec prepare_body(Body::term()) -> term().
+prepare_body(Body) ->
+    case Body of
+        <<"">> -> <<"">>;
+        _ -> jsx:decode(Body, [return_maps])
+    end.
+
+validate_with_schema(Body, Definition, ValidatorState) ->
+    jesse_schema_validator:validate_with_state(
+        [{<<"$ref">>, Definition}],
+        Body,
+        ValidatorState
+    ).
+
+binary_to_lower(V) when is_binary(V) ->
+    list_to_binary(string:to_lower({{packageName}}_client_api_utils:to_list(V))).
+
+validate_param(Rules, Name, Value, ValidatorState) ->
+    lists:foldl(
+        fun(Rule, Acc) ->
+            case validate(Rule, Name, Acc, ValidatorState) of
+                ok -> Acc;
+                {ok, Prepared} -> Prepared
+            end
+        end,
+        Value,
+        Rules
+    ).
