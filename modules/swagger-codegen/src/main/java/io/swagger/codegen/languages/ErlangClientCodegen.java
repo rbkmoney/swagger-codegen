@@ -1,244 +1,194 @@
 package io.swagger.codegen.languages;
 
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonSerializer;
+import com.fasterxml.jackson.databind.SerializerProvider;
+import com.fasterxml.jackson.databind.module.SimpleModule;
+import com.google.common.collect.ArrayListMultimap;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Multimap;
 import io.swagger.codegen.*;
-import com.samskivert.mustache.Mustache;
-import com.samskivert.mustache.Template;
-import io.swagger.models.properties.ArrayProperty;
-import io.swagger.models.properties.MapProperty;
-import io.swagger.models.properties.Property;
-import io.swagger.models.parameters.Parameter;
-
-import java.io.File;
-import java.util.*;
-import java.io.Writer;
-import java.io.IOException;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
-import org.apache.commons.lang3.StringUtils;
-
+import io.swagger.models.*;
+import io.swagger.util.Json;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.util.*;
+import java.util.Map.Entry;
+import org.apache.commons.lang3.StringUtils;
+
 public class ErlangClientCodegen extends DefaultCodegen implements CodegenConfig {
-    static Logger LOGGER = LoggerFactory.getLogger(ErlangClientCodegen.class);
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(ErlangClientCodegen.class);
+
+    protected String apiVersion = "1.0.0";
+    protected String apiPath = "src";
     protected String packageName = "swagger";
-    protected String packageVersion = "1.0.0";
-    protected String sourceFolder = "src";
-
-    public CodegenType getTag() {
-        return CodegenType.CLIENT;
-    }
-
-    public String getName() {
-        return "erlang-client";
-    }
-
-    public String getHelp() {
-        return "Generates an Erlang client library (beta).";
-    }
 
     public ErlangClientCodegen() {
         super();
-        outputFolder = "generated-code/erlang";
-        modelTemplateFiles.put("model.mustache", ".erl");
-        apiTemplateFiles.put("api.mustache", ".erl");
 
+        // set the output folder here
+        outputFolder = "generated-code/erlang-client";
+
+        if (additionalProperties.containsKey(CodegenConstants.PACKAGE_NAME)) {
+            setPackageName((String) additionalProperties.get(CodegenConstants.PACKAGE_NAME));
+        } else {
+            additionalProperties.put(CodegenConstants.PACKAGE_NAME, packageName);
+        };
+
+        /**
+         * Models.  You can write model files using the modelTemplateFiles map.
+         * if you want to create one template for file, you can do so here.
+         * for multiple files for model, just put another entry in the `modelTemplateFiles` with
+         * a different extension
+         */
+        modelTemplateFiles.clear();
+
+        /**
+         * Api classes.  You can write classes for each Api file with the apiTemplateFiles map.
+         * as with models, add multiple entries with different extensions for multiple files per
+         * class
+         */
+        apiTemplateFiles.put(
+            "client_api.mustache",   // the template to use
+            ".erl");       // the extension for each file to write
+
+        /**
+         * Template Location.  This is the location which templates will be read from.  The generator
+         * will use the resource stream to attempt to read the templates.
+         */
         embeddedTemplateDir = templateDir = "erlang-client";
 
+        /**
+         * Reserved words.  Override this with reserved words specific to your language
+         */
         setReservedWordsLowerCase(
-                Arrays.asList(
-                    "after","and","andalso","band","begin","bnot","bor","bsl","bsr","bxor","case",
-                    "catch","cond","div","end","fun","if","let","not","of","or","orelse","receive",
-                    "rem","try","when","xor"
-                    )
-                );
+            Arrays.asList(
+                "after","and","andalso","band","begin","bnot","bor","bsl","bsr","bxor","case",
+                "catch","cond","div","end","fun","if","let","not","of","or","orelse","receive",
+                "rem","try","when","xor"
+            )
+        );
 
         instantiationTypes.clear();
 
         typeMapping.clear();
-        typeMapping.put("enum", "binary()");
-        typeMapping.put("date", "calendar:date()");
-        typeMapping.put("datetime", "calendar:datetime()");
-        typeMapping.put("date-time", "calendar:datetime()");
-        typeMapping.put("boolean", "boolean()");
-        typeMapping.put("string", "binary()");
-        typeMapping.put("integer", "integer()");
-        typeMapping.put("int", "integer()");
-        typeMapping.put("float", "integer()");
-        typeMapping.put("long", "integer()");
-        typeMapping.put("double", "float()");
-        typeMapping.put("array", "list()");
-        typeMapping.put("map", "maps:map()");
-        typeMapping.put("number", "integer()");
-        typeMapping.put("bigdecimal", "float()");
-        typeMapping.put("List", "list()");
-        typeMapping.put("object", "maps:map()");
-        typeMapping.put("file", "binary()");
-        typeMapping.put("binary", "binary()");
-        typeMapping.put("bytearray", "binary()");
-        typeMapping.put("byte", "binary()");
-        typeMapping.put("uuid", "binary()");
-        typeMapping.put("password", "binary()");
+        typeMapping.put("enum", "binary");
+        typeMapping.put("date", "date");
+        typeMapping.put("datetime", "datetime");
+        typeMapping.put("boolean", "boolean");
+        typeMapping.put("string", "binary");
+        typeMapping.put("integer", "integer");
+        typeMapping.put("int", "integer");
+        typeMapping.put("float", "integer");
+        typeMapping.put("long", "integer");
+        typeMapping.put("double", "float");
+        typeMapping.put("array", "list");
+        typeMapping.put("map", "map");
+        typeMapping.put("number", "integer");
+        typeMapping.put("bigdecimal", "float");
+        typeMapping.put("List", "list");
+        typeMapping.put("object", "object");
+        typeMapping.put("file", "file");
+        typeMapping.put("binary", "binary");
+        typeMapping.put("bytearray", "binary");
+        typeMapping.put("byte", "binary");
+        typeMapping.put("uuid", "binary");
+        typeMapping.put("password", "binary");
 
         cliOptions.clear();
-        cliOptions.add(new CliOption(CodegenConstants.PACKAGE_NAME, "Erlang application name (convention: lowercase).")
-                .defaultValue(this.packageName));
-        cliOptions.add(new CliOption(CodegenConstants.PACKAGE_NAME, "Erlang application version")
-                .defaultValue(this.packageVersion));
+        cliOptions.add(new CliOption(CodegenConstants.PACKAGE_NAME, "Erlang package name (convention: lowercase).")
+            .defaultValue(this.packageName));
+        /**
+         * Additional Properties.  These values can be passed to the templates and
+         * are available in models, apis, and supporting files
+         */
+        additionalProperties.put("apiVersion", apiVersion);
+        additionalProperties.put("apiPath", apiPath);
+        /**
+         * Supporting Files.  You can write single files for the generator with the
+         * entire object tree available.  If the input file has a suffix of `.mustache
+         * it will be processed by the template engine.  Otherwise, it will be copied
+         */
+        supportingFiles.add(new SupportingFile("client_api_utils.mustache", "", toSourceFilePath("client_api_utils", "erl")));
+        supportingFiles.add(new SupportingFile("client_api_validation.mustache", "", toSourceFilePath("client_api_validation", "erl")));
+        supportingFiles.add(new SupportingFile("client_api_procession.mustache", "", toSourceFilePath("client_api_procession", "erl")));
     }
 
     @Override
-    public String getTypeDeclaration(String name) {
-        return name + ":" + name + "()";
+    public String apiPackage() {
+        return apiPath;
     }
 
+    /**
+     * Configures the type of generator.
+     *
+     * @return the CodegenType for this generator
+     * @see io.swagger.codegen.CodegenType
+     */
     @Override
-    public String getTypeDeclaration(Property p) {
-        String swaggerType = getSwaggerType(p);
-        if (typeMapping.containsKey(swaggerType)) {
-            return typeMapping.get(swaggerType);
-        }
-        return swaggerType;
+    public CodegenType getTag() {
+        return CodegenType.CLIENT;
     }
 
+    /**
+     * Configures a friendly name for the generator.  This will be used by the generator
+     * to select the library with the -l flag.
+     *
+     * @return the friendly name for the generator
+     */
     @Override
-    public String getSwaggerType(Property p) {
-        String swaggerType = super.getSwaggerType(p);
-        String type = null;
-        if(typeMapping.containsKey(swaggerType)) {
-            type = typeMapping.get(swaggerType);
-            if(languageSpecificPrimitives.contains(type))
-                return (type);
-        }
-        else
-            type = getTypeDeclaration(toModelName(snakeCase(swaggerType)));
-        return type;
+    public String getName() {
+        return "erlang-client";
     }
 
+    /**
+     * Returns human-friendly help for the generator.  Provide the consumer with help
+     * tips, parameters here
+     *
+     * @return A string value for the help message
+     */
     @Override
-    public void processOpts() {
-        super.processOpts();
-
-        if (additionalProperties.containsKey(CodegenConstants.PACKAGE_NAME)) {
-            setPackageName((String) additionalProperties.get(CodegenConstants.PACKAGE_NAME));
-        }
-        else {
-            setPackageName("swagger");
-        }
-
-        if (additionalProperties.containsKey(CodegenConstants.PACKAGE_VERSION)) {
-            setPackageVersion((String) additionalProperties.get(CodegenConstants.PACKAGE_VERSION));
-        }
-        else {
-            setPackageVersion("1.0.0");
-        }
-
-        additionalProperties.put(CodegenConstants.PACKAGE_NAME, packageName);
-        additionalProperties.put(CodegenConstants.PACKAGE_VERSION, packageVersion);
-
-        additionalProperties.put("length", new Mustache.Lambda() {
-            @Override
-            public void execute(Template.Fragment fragment, Writer writer) throws IOException {
-                writer.write(length(fragment.context()));
-            }
-        });
-
-        additionalProperties.put("qsEncode", new Mustache.Lambda() {
-            @Override
-            public void execute(Template.Fragment fragment, Writer writer) throws IOException {
-                writer.write(qsEncode(fragment.context()));
-            }
-        });
-
-        modelPackage = packageName;
-        apiPackage = packageName;
-
-        supportingFiles.add(new SupportingFile("rebar.config.mustache","", "rebar.config"));
-        supportingFiles.add(new SupportingFile("app.src.mustache", "", "src" + File.separator + this.packageName + ".app.src"));
-        supportingFiles.add(new SupportingFile("README.mustache", "", "README.md"));
-    }
-
-    public String qsEncode(Object o) {
-        String r = new String();
-        CodegenParameter q = (CodegenParameter) o;
-        if (q.isListContainer) {
-            r += "[{<<\"" + q.baseName + "\">>, X} || X <- " + q.paramName + "]";
-        } else {
-            r += "{<<\"" + q.baseName + "\">>, " + q.paramName + "}";
-        }
-        return r;
-    }
-
-    @Override
-    public String escapeReservedWord(String name)
-    {
-        // Can't start with an underscore, as our fields need to start with an
-        // UppercaseLetter so that Go treats them as public/visible.
-
-        // Options?
-        // - MyName
-        // - AName
-        // - TheName
-        // - XName
-        // - X_Name
-        // ... or maybe a suffix?
-        // - Name_ ... think this will work.
-        if(this.reservedWordsMappings().containsKey(name)) {
-            return this.reservedWordsMappings().get(name);
-        }
-        return camelize(name) + '_';
-    }
-
-    @Override
-    public String apiFileFolder() {
-        return outputFolder + File.separator + sourceFolder + File.separator;
-    }
-
-    @Override
-    public String modelFileFolder() {
-        return outputFolder + File.separator + sourceFolder + File.separator;
-    }
-
-    @Override
-    public String toVarName(String name) {
-        // replace - with _ e.g. created-at => created_at
-        name = sanitizeName(name.replaceAll("-", "_"));
-        // for reserved word or word starting with number, append _
-        if (isReservedWord(name))
-            name = escapeReservedWord(name);
-
-        return name;
-    }
-
-    @Override
-    public String toParamName(String name) {
-        return camelize(toVarName(name));
-    }
-
-    @Override
-    public String toModelName(String name) {
-        return this.packageName + "_" + underscore(name.replaceAll("-", "_"));
+    public String getHelp() {
+        return "erlang client help";
     }
 
     @Override
     public String toApiName(String name) {
-        return this.packageName + "_" + underscore(name.replaceAll("-", "_"));
-    }
-
-    @Override
-    public String toModelFilename(String name) {
-        return this.packageName + "_" + underscore(name);
-    }
-
-    @Override
-    public String toApiFilename(String name) {
-        // replace - with _ e.g. created-at => created_at
-        name = name.replaceAll("-", "_"); // FIXME: a parameter should not be assigned. Also declare the methods parameters as 'final'.
-
-        // e.g. PetApi.erl => pet_api.erl
+        if (name.length() == 0) {
+            return this.packageName + "_default_api";
+        }
         return this.packageName + "_" + underscore(name) + "_api";
+    }
+
+    /**
+     * Escapes a reserved word as defined in the `reservedWords` array. Handle escaping
+     * those terms here.  This logic is only called if a variable matches the reseved words
+     *
+     * @return the escaped term
+     */
+    @Override
+    public String escapeReservedWord(String name) {
+        return "_" + name;  // add an underscore to the name
+    }
+
+    /**
+     * Location to write api files.  You can use the apiPackage() as defined when the class is
+     * instantiated
+     */
+    @Override
+    public String apiFileFolder() {
+        return outputFolder + File.separator + apiPackage().replace('.', File.separatorChar);
+    }
+
+    @Override
+    public String toModelName(String name) {
+        return camelize(toModelFilename(name));
     }
 
     @Override
@@ -253,139 +203,49 @@ public class ErlangClientCodegen extends DefaultCodegen implements CodegenConfig
     }
 
     @Override
+    public String toApiFilename(String name) {
+        return toModuleName(name) + "_api";
+    }
+
+    @Override
     public Map<String, Object> postProcessOperations(Map<String, Object> objs) {
         Map<String, Object> operations = (Map<String, Object>) objs.get("operations");
-        List<CodegenOperation> os = (List<CodegenOperation>) operations.get("operation");
-        List<ExtendedCodegenOperation> newOs = new ArrayList<ExtendedCodegenOperation>();
-        Pattern pattern = Pattern.compile("(.*)\\{([^\\}]+)\\}(.*)");
-        for (CodegenOperation o : os) {
-            // force http method to lower case
-            o.httpMethod = o.httpMethod.toLowerCase();
-
-            if (o.isListContainer) {
-                o.returnType = "[" + o.returnBaseType + "]";
+        List<CodegenOperation> operationList = (List<CodegenOperation>) operations.get("operation");
+        for (CodegenOperation op : operationList) {
+            op.httpMethod = op.httpMethod.toLowerCase();
+            if (op.path != null) {
+                op.path = op.path.replaceAll("\\{(.*?)\\}", ":$1");
             }
-
-            ArrayList<String> pathTemplateNames = new ArrayList<String>();
-            Matcher matcher = pattern.matcher(o.path);
-            StringBuffer buffer = new StringBuffer();
-            while (matcher.find()) {
-                String pathTemplateName = matcher.group(2);
-                matcher.appendReplacement(buffer, "$1" + "\", " + camelize(pathTemplateName) + ", \"" + "$3");
-                pathTemplateNames.add(pathTemplateName);
-            }
-            ExtendedCodegenOperation eco = new ExtendedCodegenOperation(o);
-            if (buffer.toString().isEmpty()) {
-                eco.setReplacedPathName(o.path);
-            } else {
-                eco.setReplacedPathName(buffer.toString());
-            }
-            eco.setPathTemplateNames(pathTemplateNames);
-            newOs.add(eco);
         }
-        operations.put("operation", newOs);
         return objs;
+    }
+
+    @Override
+    public Map<String, Object> postProcessSupportingFileData(Map<String, Object> objs) {
+        Swagger swagger = (Swagger)objs.get("swagger");
+        if(swagger != null) {
+            try {
+                objs.put("swagger-json", Json.mapper().writeValueAsString(swagger));
+            } catch (JsonProcessingException e) {
+                LOGGER.error(e.getMessage(), e);
+            }
+        }
+        return super.postProcessSupportingFileData(objs);
     }
 
     public void setPackageName(String packageName) {
         this.packageName = packageName;
     }
 
-    public void setPackageVersion(String packageVersion) {
-        this.packageVersion = packageVersion;
+    protected String toModuleName(String name) {
+        return this.packageName + "_" + underscore(name.replaceAll("-", "_"));
     }
 
-    String length(Object o) {
-        return Integer.toString((((ExtendedCodegenOperation) o).allParams).size());
+    protected String toSourceFilePath(String name, String extension) {
+        return "src" + File.separator +  toModuleName(name) + "." + extension;
     }
 
-    @Override
-    public String escapeQuotationMark(String input) {
-        // remove " to avoid code injection
-        return input.replace("\"", "");
-    }
-
-    @Override
-    public String escapeUnsafeCharacters(String input) {
-        return input.replace("*/", "*_/").replace("/*", "/_*");
-    }
-
-    class ExtendedCodegenOperation extends CodegenOperation {
-        private List<String> pathTemplateNames = new ArrayList<String>();
-        private String replacedPathName;
-
-        public ExtendedCodegenOperation(CodegenOperation o) {
-            super();
-
-            // Copy all fields of CodegenOperation
-            this.responseHeaders.addAll(o.responseHeaders);
-            this.hasAuthMethods = o.hasAuthMethods;
-            this.hasConsumes = o.hasConsumes;
-            this.hasProduces = o.hasProduces;
-            this.hasParams = o.hasParams;
-            this.hasOptionalParams = o.hasOptionalParams;
-            this.returnTypeIsPrimitive = o.returnTypeIsPrimitive;
-            this.returnSimpleType = o.returnSimpleType;
-            this.subresourceOperation = o.subresourceOperation;
-            this.isMapContainer = o.isMapContainer;
-            this.isListContainer = o.isListContainer;
-            this.isMultipart = o.isMultipart;
-            this.hasMore = o.hasMore;
-            this.isResponseBinary = o.isResponseBinary;
-            this.hasReference = o.hasReference;
-            this.isRestfulIndex = o.isRestfulIndex;
-            this.isRestfulShow = o.isRestfulShow;
-            this.isRestfulCreate = o.isRestfulCreate;
-            this.isRestfulUpdate = o.isRestfulUpdate;
-            this.isRestfulDestroy = o.isRestfulDestroy;
-            this.isRestful = o.isRestful;
-            this.path = o.path;
-            this.operationId = o.operationId;
-            this.returnType = o.returnType;
-            this.httpMethod = o.httpMethod;
-            this.returnBaseType = o.returnBaseType;
-            this.returnContainer = o.returnContainer;
-            this.summary = o.summary;
-            this.unescapedNotes = o.unescapedNotes;
-            this.notes = o.notes;
-            this.baseName = o.baseName;
-            this.defaultResponse = o.defaultResponse;
-            this.discriminator = o.discriminator;
-            this.consumes = o.consumes;
-            this.produces = o.produces;
-            this.bodyParam = o.bodyParam;
-            this.allParams = o.allParams;
-            this.bodyParams = o.bodyParams;
-            this.pathParams = o.pathParams;
-            this.queryParams = o.queryParams;
-            this.headerParams = o.headerParams;
-            this.formParams = o.formParams;
-            this.authMethods = o.authMethods;
-            this.tags = o.tags;
-            this.responses = o.responses;
-            this.imports = o.imports;
-            this.examples = o.examples;
-            this.externalDocs = o.externalDocs;
-            this.vendorExtensions = o.vendorExtensions;
-            this.nickname = o.nickname;
-            this.operationIdLowerCase = o.operationIdLowerCase;
-            this.operationIdCamelCase = o.operationIdCamelCase;
-        }
-
-        public List<String> getPathTemplateNames() {
-            return pathTemplateNames;
-        }
-
-        public void setPathTemplateNames(List<String> pathTemplateNames) {
-            this.pathTemplateNames = pathTemplateNames;
-        }
-
-        public String getReplacedPathName() {
-            return replacedPathName;
-        }
-
-        public void setReplacedPathName(String replacedPathName) {
-            this.replacedPathName = replacedPathName;
-        }
+    protected String toIncludeFilePath(String name, String extension) {
+        return "include" + File.separator + toModuleName(name) + "." + extension;
     }
 }
