@@ -48,8 +48,7 @@ request_params(_) ->
     {min_length, MaxLength :: integer()} |
     {pattern, Pattern :: string()} |
     schema |
-    required |
-    not_required.
+    {required, boolean()}.
 
 -spec request_param_info(OperationID :: operation_id(), Name :: request_param()) -> #{
     source => qs_val | binding | header | body,
@@ -68,7 +67,7 @@ request_param_info('{{operationId}}', {{^isBodyParam}}'{{baseName}}'{{/isBodyPar
 request_param_info(OperationID, Name) ->
     error({unknown_param, OperationID, Name}).
 %%%
--spec validate(tuple(),term(),term(),term()) -> ok | no_return().
+-spec validate(Rule :: rule(), Name :: term(), Value :: term(), ValidatorState :: term()) -> ok | {ok, term()} | no_return().
 validate(Rule = {required, true}, Name, Value, _ValidatorState) ->
     case Value of
         undefined -> validation_error(Rule, Name);
