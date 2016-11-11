@@ -54,8 +54,7 @@ request_params(_) ->
     {min_length, MaxLength :: integer()} |
     {pattern, Pattern :: string()} |
     schema |
-    required |
-    not_required.
+    {required, boolean()}.
 
 -spec request_param_info(OperationID :: operation_id(), Name :: request_param()) -> #{
     source => qs_val | binding | header | body,
