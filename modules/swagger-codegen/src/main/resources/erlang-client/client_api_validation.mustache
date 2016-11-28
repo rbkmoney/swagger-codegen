@@ -194,7 +194,7 @@ validate(Rule = {list, Format, Ruleset}, Name, Value, ValidatorState) ->
     end;
 
 validate(Rule = schema, Name, Value, ValidatorState) ->
-    Definition =  list_to_binary("#/definitions/" ++ swagger_utils:to_list(Name)),
+    Definition =  list_to_binary("#/definitions/" ++ {{packageName}}_client_api_utils:to_list(Name)),
     try
         _ = validate_with_schema(Value, Definition, ValidatorState),
         ok
