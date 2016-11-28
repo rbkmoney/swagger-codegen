@@ -118,6 +118,7 @@ public class ErlangClientCodegen extends DefaultCodegen implements CodegenConfig
         supportingFiles.add(new SupportingFile("client_api_utils.mustache", "", toSourceFilePath("client_api_utils", "erl")));
         supportingFiles.add(new SupportingFile("client_api_validation.mustache", "", toSourceFilePath("client_api_validation", "erl")));
         supportingFiles.add(new SupportingFile("client_api_procession.mustache", "", toSourceFilePath("client_api_procession", "erl")));
+        supportingFiles.add(new SupportingFile("swagger.mustache", "", toPrivFilePath("swagger", "json")));
     }
 
     @Override
@@ -245,7 +246,7 @@ public class ErlangClientCodegen extends DefaultCodegen implements CodegenConfig
         return "src" + File.separator +  toModuleName(name) + "." + extension;
     }
 
-    protected String toIncludeFilePath(String name, String extension) {
-        return "include" + File.separator + toModuleName(name) + "." + extension;
+    protected String toPrivFilePath(String name, String extension) {
+        return "priv" + File.separator + name + "." + extension;
     }
 }
