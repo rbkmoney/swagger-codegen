@@ -1,34 +1,55 @@
+import io.swagger.annotations.ApiModelProperty;
 import javax.xml.bind.annotation.XmlElement;
 import javax.xml.bind.annotation.XmlRootElement;
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.XmlType;
 import javax.xml.bind.annotation.XmlEnum;
+import javax.xml.bind.annotation.XmlEnumValue;
 
+{{#useJaxbAnnotations}}
 @XmlAccessorType(XmlAccessType.FIELD)
 {{#hasVars}} @XmlType(name = "{{classname}}", propOrder =
-	{ {{#vars}}"{{name}}"{{^-last}}, {{/-last}}{{/vars}}
+    { {{#vars}}"{{name}}"{{^-last}}, {{/-last}}{{/vars}}
 }){{/hasVars}}
 {{^hasVars}}@XmlType(name = "{{classname}}"){{/hasVars}}
 {{^parent}}@XmlRootElement(name="{{classname}}"){{/parent}}
+{{/useJaxbAnnotations}}
+{{#description}}
+@ApiModel(description="{{{description}}}")
+{{/description}}
 public class {{classname}} {{#parent}}extends {{{parent}}}{{/parent}} {
   {{#vars}}{{#isEnum}}
 
 {{>enumClass}}{{/isEnum}}{{#items.isEnum}}{{#items}}
 
 {{>enumClass}}{{/items}}{{/items.isEnum}}
-
-  @XmlElement(name="{{baseName}}")
+{{#useJaxbAnnotations}}
+  @XmlElement(name="{{baseName}}"{{#required}}, required = {{required}}{{/required}})
+{{/useJaxbAnnotations}}
+  @ApiModelProperty({{#example}}example = "{{example}}", {{/example}}{{#required}}required = {{required}}, {{/required}}value = "{{{description}}}")
   private {{{datatypeWithEnum}}} {{name}} = {{{defaultValue}}};{{/vars}}
 
   {{#vars}}
-  /**{{#description}}
-   * {{{description}}}{{/description}}{{#minimum}}
-   * minimum: {{minimum}}{{/minimum}}{{#maximum}}
-   * maximum: {{maximum}}{{/maximum}}
-   **/
-  {{#vendorExtensions.extraAnnotation}}{{vendorExtensions.extraAnnotation}}{{/vendorExtensions.extraAnnotation}}
-  public {{{datatypeWithEnum}}} {{getter}}() {
+ /**
+  {{#description}}
+   * {{{description}}}
+  {{/description}}
+  {{^description}}
+   * Get {{name}}
+  {{/description}}
+  {{#minimum}}
+   * minimum: {{minimum}}
+  {{/minimum}}
+  {{#maximum}}
+   * maximum: {{maximum}}
+  {{/maximum}}
+   * @return {{name}}
+  **/
+{{#vendorExtensions.extraAnnotation}}
+  {{{vendorExtensions.extraAnnotation}}}
+{{/vendorExtensions.extraAnnotation}}
+{{#useBeanValidation}}{{>beanValidation}}{{/useBeanValidation}}  public {{{datatypeWithEnum}}} {{getter}}() {
     return {{name}};
   }
   public void {{setter}}({{{datatypeWithEnum}}} {{name}}) {

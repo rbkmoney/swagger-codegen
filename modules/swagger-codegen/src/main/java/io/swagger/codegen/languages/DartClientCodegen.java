@@ -25,15 +25,24 @@ public class DartClientCodegen extends DefaultCodegen implements CodegenConfig {
     protected String pubVersion = "1.0.0";
     protected String pubDescription = "Swagger API client";
     protected String sourceFolder = "";
+    protected String apiDocPath = "docs/";
+    protected String modelDocPath = "docs/";
 
     public DartClientCodegen() {
         super();
+
+        // clear import mapping (from default generator) as dart does not use it
+        // at the moment
+        importMapping.clear();
+
         outputFolder = "generated-code/dart";
         modelTemplateFiles.put("model.mustache", ".dart");
         apiTemplateFiles.put("api.mustache", ".dart");
         embeddedTemplateDir = templateDir = "dart";
         apiPackage = "lib.api";
         modelPackage = "lib.model";
+        modelDocTemplateFiles.put("object_doc.mustache", ".md");
+        apiDocTemplateFiles.put("api_doc.mustache", ".md");
 
         setReservedWordsLowerCase(
                 Arrays.asList(
@@ -53,6 +62,7 @@ public class DartClientCodegen extends DefaultCodegen implements CodegenConfig {
                         "String",
                         "bool",
                         "int",
+                        "num",
                         "double")
         );
         instantiationTypes.put("array", "List");
@@ -64,11 +74,12 @@ public class DartClientCodegen extends DefaultCodegen implements CodegenConfig {
         typeMapping.put("List", "List");
         typeMapping.put("boolean", "bool");
         typeMapping.put("string", "String");
+        typeMapping.put("char", "String");
         typeMapping.put("int", "int");
-        typeMapping.put("float", "double");
         typeMapping.put("long", "int");
         typeMapping.put("short", "int");
-        typeMapping.put("char", "String");
+        typeMapping.put("number", "num");
+        typeMapping.put("float", "double");
         typeMapping.put("double", "double");
         typeMapping.put("object", "Object");
         typeMapping.put("integer", "int");
@@ -138,8 +149,13 @@ public class DartClientCodegen extends DefaultCodegen implements CodegenConfig {
             this.setSourceFolder((String) additionalProperties.get(CodegenConstants.SOURCE_FOLDER));
         }
 
+        // make api and model doc path available in mustache template
+        additionalProperties.put("apiDocPath", apiDocPath);
+        additionalProperties.put("modelDocPath", modelDocPath);
+
         final String libFolder = sourceFolder + File.separator + "lib";
         supportingFiles.add(new SupportingFile("pubspec.mustache", "", "pubspec.yaml"));
+        supportingFiles.add(new SupportingFile("analysis_options.mustache", "", ".analysis_options"));
         supportingFiles.add(new SupportingFile("api_client.mustache", libFolder, "api_client.dart"));
         supportingFiles.add(new SupportingFile("api_exception.mustache", libFolder, "api_exception.dart"));
         supportingFiles.add(new SupportingFile("api_helper.mustache", libFolder, "api_helper.dart"));
@@ -152,12 +168,16 @@ public class DartClientCodegen extends DefaultCodegen implements CodegenConfig {
         supportingFiles.add(new SupportingFile("auth/oauth.mustache", authFolder, "oauth.dart"));
         supportingFiles.add(new SupportingFile("git_push.sh.mustache", "", "git_push.sh"));
         supportingFiles.add(new SupportingFile("gitignore.mustache", "", ".gitignore"));
+        supportingFiles.add(new SupportingFile("README.mustache", "", "README.md"));
 
     }
 
 
     @Override
-    public String escapeReservedWord(String name) {
+    public String escapeReservedWord(String name) {           
+        if(this.reservedWordsMappings().containsKey(name)) {
+            return this.reservedWordsMappings().get(name);
+        }
         return "_" + name;
     }
 
@@ -169,6 +189,16 @@ public class DartClientCodegen extends DefaultCodegen implements CodegenConfig {
     @Override
     public String modelFileFolder() {
         return outputFolder + "/" + sourceFolder + "/" + modelPackage().replace('.', File.separatorChar);
+    }
+
+    @Override
+    public String apiDocFileFolder() {
+        return (outputFolder + "/" + apiDocPath).replace('/', File.separatorChar);
+    }
+
+    @Override
+    public String modelDocFileFolder() {
+        return (outputFolder + "/" + modelDocPath).replace('/', File.separatorChar);
     }
 
     @Override
@@ -203,7 +233,8 @@ public class DartClientCodegen extends DefaultCodegen implements CodegenConfig {
     public String toModelName(String name) {
         // model name cannot use reserved keyword, e.g. return
         if (isReservedWord(name)) {
-            throw new RuntimeException(name + " (reserved word) cannot be used as a model name");
+            LOGGER.warn(name + " (reserved word) cannot be used as model filename. Renamed to " + camelize("model_" + name));
+            name = "model_" + name; // e.g. return => ModelReturn (after camelize)
         }
 
         // camelize the model name
@@ -265,7 +296,9 @@ public class DartClientCodegen extends DefaultCodegen implements CodegenConfig {
     public String toOperationId(String operationId) {
         // method name cannot use reserved keyword, e.g. return
         if (isReservedWord(operationId)) {
-            throw new RuntimeException(operationId + " (reserved word) cannot be used as method name");
+            String newOperationId = camelize("call_" + operationId, true);
+            LOGGER.warn(operationId + " (reserved word) cannot be used as method name. Renamed to " + newOperationId);
+            return newOperationId;
         }
 
         return camelize(operationId, true);

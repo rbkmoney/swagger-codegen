@@ -3,14 +3,17 @@ package io.swagger.codegen.languages;
 import org.apache.commons.lang3.StringUtils;
 
 import java.io.File;
+import java.util.List;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.TreeSet;
 
 import io.swagger.codegen.CliOption;
 import io.swagger.codegen.CodegenConfig;
 import io.swagger.codegen.CodegenConstants;
+import io.swagger.codegen.CodegenModel;
 import io.swagger.codegen.CodegenProperty;
 import io.swagger.codegen.CodegenType;
 import io.swagger.codegen.DefaultCodegen;
@@ -23,9 +26,15 @@ public abstract class AbstractTypeScriptClientCodegen extends DefaultCodegen imp
 
     protected String modelPropertyNaming= "camelCase";
     protected Boolean supportsES6 = true;
+    protected HashSet<String> languageGenericTypes;
 
     public AbstractTypeScriptClientCodegen() {
         super();
+
+        // clear import mapping (from default generator) as TS does not use it
+        // at the moment
+        importMapping.clear();
+
         supportsInheritance = true;
         setReservedWordsLowerCase(Arrays.asList(
                 // local variable names used in API methods (endpoints)
@@ -47,8 +56,14 @@ public abstract class AbstractTypeScriptClientCodegen extends DefaultCodegen imp
                 "Array",
                 "Date",
                 "number",
-                "any"
+                "any",
+                "Error"
         ));
+
+        languageGenericTypes = new HashSet<String>(Arrays.asList(
+                "Array"
+        ));
+
         instantiationTypes.put("array", "Array");
 
         typeMapping = new HashMap<String, String>();
@@ -88,7 +103,7 @@ public abstract class AbstractTypeScriptClientCodegen extends DefaultCodegen imp
         }
 
         if (additionalProperties.containsKey(CodegenConstants.SUPPORTS_ES6)) {
-            setSupportsES6(Boolean.valueOf((String)additionalProperties.get(CodegenConstants.SUPPORTS_ES6)));
+            setSupportsES6(Boolean.valueOf(additionalProperties.get(CodegenConstants.SUPPORTS_ES6).toString()));
             additionalProperties.put("supportsES6", getSupportsES6());
         }
     }
@@ -99,10 +114,13 @@ public abstract class AbstractTypeScriptClientCodegen extends DefaultCodegen imp
 	    return CodegenType.CLIENT;
 	}
 
-	@Override
-	public String escapeReservedWord(String name) {
-		return "_" + name;
-	}
+        @Override
+        public String escapeReservedWord(String name) {           
+            if(this.reservedWordsMappings().containsKey(name)) {
+                return this.reservedWordsMappings().get(name);
+            }
+            return "_" + name;
+        }
 
 	@Override
 	public String apiFileFolder() {
@@ -166,6 +184,11 @@ public abstract class AbstractTypeScriptClientCodegen extends DefaultCodegen imp
                 return modelName;
             }
 
+            if (languageSpecificPrimitives.contains(name)) {
+                String modelName = camelize("model_" + name);
+                LOGGER.warn(name + " (model name matches existing language type) cannot be used as a model name. Renamed to " + modelName);
+                return modelName;
+            }
             // camelize the model name
             // phone_number => PhoneNumber
             return camelize(name);
@@ -252,7 +275,7 @@ public abstract class AbstractTypeScriptClientCodegen extends DefaultCodegen imp
 
     @Override
     public String toEnumValue(String value, String datatype) {
-        if ("int".equals(datatype) || "double".equals(datatype) || "float".equals(datatype)) {
+        if ("number".equals(datatype)) {
             return value;
         } else {
             return "\'" + escapeText(value) + "\'";
@@ -266,9 +289,19 @@ public abstract class AbstractTypeScriptClientCodegen extends DefaultCodegen imp
 
     @Override
     public String toEnumVarName(String name, String datatype) {
+        if (name.length() == 0) {
+            return "Empty";
+        }
+
+        // for symbol, e.g. $, #
+        if (getSymbolName(name) != null) {
+            return camelize(getSymbolName(name));
+        }
+
         // number
-        if ("int".equals(datatype) || "double".equals(datatype) || "float".equals(datatype)) {
-            String varName = new String(name);
+        if ("number".equals(datatype)) {
+            String varName = "NUMBER_" + name;
+
             varName = varName.replaceAll("-", "MINUS_");
             varName = varName.replaceAll("\\+", "PLUS_");
             varName = varName.replaceAll("\\.", "_DOT_");
@@ -305,7 +338,20 @@ public abstract class AbstractTypeScriptClientCodegen extends DefaultCodegen imp
     @Override
     public Map<String, Object> postProcessModels(Map<String, Object> objs) {
         // process enum in models
-        return postProcessModelsEnum(objs);
+        List<Object> models = (List<Object>) postProcessModelsEnum(objs).get("models");
+        for (Object _mo : models) {
+            Map<String, Object> mo = (Map<String, Object>) _mo;
+            CodegenModel cm = (CodegenModel) mo.get("model");
+            cm.imports = new TreeSet(cm.imports);
+            for (CodegenProperty var : cm.vars) {
+                // name enum with model name, e.g. StatuEnum => Pet.StatusEnum
+                if (Boolean.TRUE.equals(var.isEnum)) {
+                    var.datatypeWithEnum = var.datatypeWithEnum.replace(var.enumName, cm.classname + "." + var.enumName);
+                }
+            }
+        } 
+
+        return objs;
     }
 
     public void setSupportsES6(Boolean value) {

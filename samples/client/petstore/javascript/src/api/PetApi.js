@@ -9,34 +9,23 @@
  * https://github.com/swagger-api/swagger-codegen.git
  * Do not edit the class manually.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
  */
 
 (function(root, factory) {
   if (typeof define === 'function' && define.amd) {
     // AMD. Register as an anonymous module.
-    define(['ApiClient', 'model/Pet', 'model/ApiResponse'], factory);
+    define(['ApiClient', 'model/ApiResponse', 'model/Pet'], factory);
   } else if (typeof module === 'object' && module.exports) {
     // CommonJS-like environments that support module.exports, like Node.
-    module.exports = factory(require('../ApiClient'), require('../model/Pet'), require('../model/ApiResponse'));
+    module.exports = factory(require('../ApiClient'), require('../model/ApiResponse'), require('../model/Pet'));
   } else {
     // Browser globals (root is window)
     if (!root.SwaggerPetstore) {
       root.SwaggerPetstore = {};
     }
-    root.SwaggerPetstore.PetApi = factory(root.SwaggerPetstore.ApiClient, root.SwaggerPetstore.Pet, root.SwaggerPetstore.ApiResponse);
+    root.SwaggerPetstore.PetApi = factory(root.SwaggerPetstore.ApiClient, root.SwaggerPetstore.ApiResponse, root.SwaggerPetstore.Pet);
   }
-}(this, function(ApiClient, Pet, ApiResponse) {
+}(this, function(ApiClient, ApiResponse, Pet) {
   'use strict';
 
   /**
@@ -75,7 +64,7 @@
 
       // verify the required parameter 'body' is set
       if (body == undefined || body == null) {
-        throw "Missing the required parameter 'body' when calling addPet";
+        throw new Error("Missing the required parameter 'body' when calling addPet");
       }
 
 
@@ -111,7 +100,7 @@
     /**
      * Deletes a pet
      * 
-     * @param {Integer} petId Pet id to delete
+     * @param {Number} petId Pet id to delete
      * @param {Object} opts Optional parameters
      * @param {String} opts.apiKey 
      * @param {module:api/PetApi~deletePetCallback} callback The callback function, accepting three arguments: error, data, response
@@ -122,7 +111,7 @@
 
       // verify the required parameter 'petId' is set
       if (petId == undefined || petId == null) {
-        throw "Missing the required parameter 'petId' when calling deletePet";
+        throw new Error("Missing the required parameter 'petId' when calling deletePet");
       }
 
 
@@ -162,14 +151,14 @@
      * Multiple status values can be provided with comma separated strings
      * @param {Array.<module:model/String>} status Status values that need to be considered for filter
      * @param {module:api/PetApi~findPetsByStatusCallback} callback The callback function, accepting three arguments: error, data, response
-     * data is of type: {Array.<module:model/Pet>}
+     * data is of type: {@link Array.<module:model/Pet>}
      */
     this.findPetsByStatus = function(status, callback) {
       var postBody = null;
 
       // verify the required parameter 'status' is set
       if (status == undefined || status == null) {
-        throw "Missing the required parameter 'status' when calling findPetsByStatus";
+        throw new Error("Missing the required parameter 'status' when calling findPetsByStatus");
       }
 
 
@@ -208,14 +197,14 @@
      * Multiple tags can be provided with comma separated strings. Use tag1, tag2, tag3 for testing.
      * @param {Array.<String>} tags Tags to filter by
      * @param {module:api/PetApi~findPetsByTagsCallback} callback The callback function, accepting three arguments: error, data, response
-     * data is of type: {Array.<module:model/Pet>}
+     * data is of type: {@link Array.<module:model/Pet>}
      */
     this.findPetsByTags = function(tags, callback) {
       var postBody = null;
 
       // verify the required parameter 'tags' is set
       if (tags == undefined || tags == null) {
-        throw "Missing the required parameter 'tags' when calling findPetsByTags";
+        throw new Error("Missing the required parameter 'tags' when calling findPetsByTags");
       }
 
 
@@ -252,16 +241,16 @@
     /**
      * Find pet by ID
      * Returns a single pet
-     * @param {Integer} petId ID of pet to return
+     * @param {Number} petId ID of pet to return
      * @param {module:api/PetApi~getPetByIdCallback} callback The callback function, accepting three arguments: error, data, response
-     * data is of type: {module:model/Pet}
+     * data is of type: {@link module:model/Pet}
      */
     this.getPetById = function(petId, callback) {
       var postBody = null;
 
       // verify the required parameter 'petId' is set
       if (petId == undefined || petId == null) {
-        throw "Missing the required parameter 'petId' when calling getPetById";
+        throw new Error("Missing the required parameter 'petId' when calling getPetById");
       }
 
 
@@ -306,7 +295,7 @@
 
       // verify the required parameter 'body' is set
       if (body == undefined || body == null) {
-        throw "Missing the required parameter 'body' when calling updatePet";
+        throw new Error("Missing the required parameter 'body' when calling updatePet");
       }
 
 
@@ -342,7 +331,7 @@
     /**
      * Updates a pet in the store with form data
      * 
-     * @param {Integer} petId ID of pet that needs to be updated
+     * @param {Number} petId ID of pet that needs to be updated
      * @param {Object} opts Optional parameters
      * @param {String} opts.name Updated name of the pet
      * @param {String} opts.status Updated status of the pet
@@ -354,7 +343,7 @@
 
       // verify the required parameter 'petId' is set
       if (petId == undefined || petId == null) {
-        throw "Missing the required parameter 'petId' when calling updatePetWithForm";
+        throw new Error("Missing the required parameter 'petId' when calling updatePetWithForm");
       }
 
 
@@ -393,12 +382,12 @@
     /**
      * uploads an image
      * 
-     * @param {Integer} petId ID of pet to update
+     * @param {Number} petId ID of pet to update
      * @param {Object} opts Optional parameters
      * @param {String} opts.additionalMetadata Additional data to pass to server
      * @param {File} opts.file file to upload
      * @param {module:api/PetApi~uploadFileCallback} callback The callback function, accepting three arguments: error, data, response
-     * data is of type: {module:model/ApiResponse}
+     * data is of type: {@link module:model/ApiResponse}
      */
     this.uploadFile = function(petId, opts, callback) {
       opts = opts || {};
@@ -406,7 +395,7 @@
 
       // verify the required parameter 'petId' is set
       if (petId == undefined || petId == null) {
-        throw "Missing the required parameter 'petId' when calling uploadFile";
+        throw new Error("Missing the required parameter 'petId' when calling uploadFile");
       }
 
 

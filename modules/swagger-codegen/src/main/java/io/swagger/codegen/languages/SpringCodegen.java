@@ -4,7 +4,6 @@ import io.swagger.codegen.*;
 import io.swagger.models.Operation;
 import io.swagger.models.Path;
 import io.swagger.models.Swagger;
-import org.apache.commons.lang3.BooleanUtils;
 
 import java.io.File;
 import java.util.*;
@@ -15,9 +14,12 @@ public class SpringCodegen extends AbstractJavaCodegen {
     public static final String CONFIG_PACKAGE = "configPackage";
     public static final String BASE_PACKAGE = "basePackage";
     public static final String INTERFACE_ONLY = "interfaceOnly";
+    public static final String DELEGATE_PATTERN = "delegatePattern";
     public static final String SINGLE_CONTENT_TYPES = "singleContentTypes";
     public static final String JAVA_8 = "java8";
     public static final String ASYNC = "async";
+    public static final String RESPONSE_WRAPPER = "responseWrapper";
+    public static final String USE_TAGS = "useTags";
     public static final String SPRING_MVC_LIBRARY = "spring-mvc";
     public static final String SPRING_CLOUD_LIBRARY = "spring-cloud";
 
@@ -25,9 +27,12 @@ public class SpringCodegen extends AbstractJavaCodegen {
     protected String configPackage = "io.swagger.configuration";
     protected String basePackage = "io.swagger";
     protected boolean interfaceOnly = false;
+    protected boolean delegatePattern = false;
     protected boolean singleContentTypes = false;
     protected boolean java8 = false;
     protected boolean async = false;
+    protected String responseWrapper = "";
+    protected boolean useTags = false;
 
     public SpringCodegen() {
         super();
@@ -42,13 +47,19 @@ public class SpringCodegen extends AbstractJavaCodegen {
         additionalProperties.put(CONFIG_PACKAGE, configPackage);
         additionalProperties.put(BASE_PACKAGE, basePackage);
 
+        // spring uses the jackson lib
+        additionalProperties.put("jackson", "true");
+
         cliOptions.add(new CliOption(TITLE, "server title name or client service name"));
         cliOptions.add(new CliOption(CONFIG_PACKAGE, "configuration package for generated code"));
         cliOptions.add(new CliOption(BASE_PACKAGE, "base package for generated code"));
         cliOptions.add(CliOption.newBoolean(INTERFACE_ONLY, "Whether to generate only API interface stubs without the server files."));
+        cliOptions.add(CliOption.newBoolean(DELEGATE_PATTERN, "Whether to generate the server files using the delegate pattern"));
         cliOptions.add(CliOption.newBoolean(SINGLE_CONTENT_TYPES, "Whether to select only one produces/consumes content-type by operation."));
         cliOptions.add(CliOption.newBoolean(JAVA_8, "use java8 default interface"));
         cliOptions.add(CliOption.newBoolean(ASYNC, "use async Callable controllers"));
+        cliOptions.add(new CliOption(RESPONSE_WRAPPER, "wrap the responses in given type (Future,Callable,CompletableFuture,ListenableFuture,DeferredResult,HystrixCommand,RxObservable,RxSingle or fully qualified type)"));
+        cliOptions.add(CliOption.newBoolean(USE_TAGS, "use tags for creating interface and controller classnames"));
 
         supportedLibraries.put(DEFAULT_LIBRARY, "Spring-boot Server application using the SpringFox integration.");
         supportedLibraries.put(SPRING_MVC_LIBRARY, "Spring-MVC Server application using the SpringFox integration.");
@@ -103,6 +114,10 @@ public class SpringCodegen extends AbstractJavaCodegen {
             this.setInterfaceOnly(Boolean.valueOf(additionalProperties.get(INTERFACE_ONLY).toString()));
         }
 
+        if (additionalProperties.containsKey(DELEGATE_PATTERN)) {
+            this.setDelegatePattern(Boolean.valueOf(additionalProperties.get(DELEGATE_PATTERN).toString()));
+        }
+
         if (additionalProperties.containsKey(SINGLE_CONTENT_TYPES)) {
             this.setSingleContentTypes(Boolean.valueOf(additionalProperties.get(SINGLE_CONTENT_TYPES).toString()));
         }
@@ -115,8 +130,21 @@ public class SpringCodegen extends AbstractJavaCodegen {
             this.setAsync(Boolean.valueOf(additionalProperties.get(ASYNC).toString()));
         }
 
+        if (additionalProperties.containsKey(RESPONSE_WRAPPER)) {
+            this.setResponseWrapper((String) additionalProperties.get(RESPONSE_WRAPPER));
+        }
+
+        if (additionalProperties.containsKey(USE_TAGS)) {
+            this.setUseTags(Boolean.valueOf(additionalProperties.get(USE_TAGS).toString()));
+        }
+
         supportingFiles.add(new SupportingFile("pom.mustache", "", "pom.xml"));
         supportingFiles.add(new SupportingFile("README.mustache", "", "README.md"));
+
+        if (this.interfaceOnly && this.delegatePattern) {
+            throw new IllegalArgumentException(
+                    String.format("Can not generate code with `%s` and `%s` both true.", DELEGATE_PATTERN, INTERFACE_ONLY));
+        }
 
         if (!this.interfaceOnly) {
             if (library.equals(DEFAULT_LIBRARY)) {
@@ -124,6 +152,8 @@ public class SpringCodegen extends AbstractJavaCodegen {
                         (sourceFolder + File.separator + configPackage).replace(".", java.io.File.separator), "HomeController.java"));
                 supportingFiles.add(new SupportingFile("swagger2SpringBoot.mustache",
                         (sourceFolder + File.separator + basePackage).replace(".", java.io.File.separator), "Swagger2SpringBoot.java"));
+                supportingFiles.add(new SupportingFile("RFC3339DateFormat.mustache",
+                        (sourceFolder + File.separator + basePackage).replace(".", java.io.File.separator), "RFC3339DateFormat.java"));
                 supportingFiles.add(new SupportingFile("application.mustache",
                         ("src.main.resources").replace(".", java.io.File.separator), "application.properties"));
             }
@@ -134,6 +164,8 @@ public class SpringCodegen extends AbstractJavaCodegen {
                         (sourceFolder + File.separator + configPackage).replace(".", java.io.File.separator), "WebMvcConfiguration.java"));
                 supportingFiles.add(new SupportingFile("swaggerUiConfiguration.mustache",
                         (sourceFolder + File.separator + configPackage).replace(".", java.io.File.separator), "SwaggerUiConfiguration.java"));
+                supportingFiles.add(new SupportingFile("RFC3339DateFormat.mustache",
+                        (sourceFolder + File.separator + configPackage).replace(".", java.io.File.separator), "RFC3339DateFormat.java"));
                 supportingFiles.add(new SupportingFile("application.properties",
                         ("src.main.resources").replace(".", java.io.File.separator), "swagger.properties"));
             }
@@ -164,38 +196,85 @@ public class SpringCodegen extends AbstractJavaCodegen {
             }
         }
 
+        if (!this.delegatePattern && this.java8) {
+            additionalProperties.put("jdk8-no-delegate", true);
+        }
+
+
+        if (this.delegatePattern) {
+            additionalProperties.put("isDelegate", "true");
+            apiTemplateFiles.put("apiDelegate.mustache", "Delegate.java");
+        }
+
         if (this.java8) {
             additionalProperties.put("javaVersion", "1.8");
+            additionalProperties.put("jdk8", "true");
+            if (this.async) {
+                additionalProperties.put(RESPONSE_WRAPPER, "CompletableFuture");
+            }
             typeMapping.put("date", "LocalDate");
             typeMapping.put("DateTime", "OffsetDateTime");
             importMapping.put("LocalDate", "java.time.LocalDate");
             importMapping.put("OffsetDateTime", "java.time.OffsetDateTime");
+        } else if (this.async) {
+            additionalProperties.put(RESPONSE_WRAPPER, "Callable");
         }
+
+        // Some well-known Spring or Spring-Cloud response wrappers
+        switch (this.responseWrapper) {
+            case "Future":
+            case "Callable":
+            case "CompletableFuture":
+                additionalProperties.put(RESPONSE_WRAPPER, "java.util.concurrent" + this.responseWrapper);
+                break;
+            case "ListenableFuture":
+                additionalProperties.put(RESPONSE_WRAPPER, "org.springframework.util.concurrent.ListenableFuture");
+                break;
+            case "DeferredResult":
+                additionalProperties.put(RESPONSE_WRAPPER, "org.springframework.web.context.request.DeferredResult");
+                break;
+            case "HystrixCommand":
+                additionalProperties.put(RESPONSE_WRAPPER, "com.netflix.hystrix.HystrixCommand");
+                break;
+            case "RxObservable":
+                additionalProperties.put(RESPONSE_WRAPPER, "rx.Observable");
+                break;
+            case "RxSingle":
+                additionalProperties.put(RESPONSE_WRAPPER, "rx.Single");
+                break;
+            default:
+                break;
+        }
+
     }
 
     @Override
     public void addOperationToGroup(String tag, String resourcePath, Operation operation, CodegenOperation co, Map<String, List<CodegenOperation>> operations) {
-        String basePath = resourcePath;
-        if (basePath.startsWith("/")) {
-            basePath = basePath.substring(1);
-        }
-        int pos = basePath.indexOf("/");
-        if (pos > 0) {
-            basePath = basePath.substring(0, pos);
-        }
+        if((library.equals(DEFAULT_LIBRARY) || library.equals(SPRING_MVC_LIBRARY)) && !useTags) {
+            String basePath = resourcePath;
+            if (basePath.startsWith("/")) {
+                basePath = basePath.substring(1);
+            }
+            int pos = basePath.indexOf("/");
+            if (pos > 0) {
+                basePath = basePath.substring(0, pos);
+            }
 
-        if (basePath == "") {
-            basePath = "default";
+            if (basePath.equals("")) {
+                basePath = "default";
+            } else {
+                co.subresourceOperation = !co.path.isEmpty();
+            }
+            List<CodegenOperation> opList = operations.get(basePath);
+            if (opList == null) {
+                opList = new ArrayList<CodegenOperation>();
+                operations.put(basePath, opList);
+            }
+            opList.add(co);
+            co.baseName = basePath;
         } else {
-            co.subresourceOperation = !co.path.isEmpty();
+            super.addOperationToGroup(tag, resourcePath, operation, co, operations);
         }
-        List<CodegenOperation> opList = operations.get(basePath);
-        if (opList == null) {
-            opList = new ArrayList<CodegenOperation>();
-            operations.put(basePath, opList);
-        }
-        opList.add(co);
-        co.baseName = basePath;
     }
 
     @Override
@@ -231,7 +310,7 @@ public class SpringCodegen extends AbstractJavaCodegen {
         }
 
         this.additionalProperties.put("serverPort", port);
-        if (swagger != null && swagger.getPaths() != null) {
+        if (swagger.getPaths() != null) {
             for (String pathname : swagger.getPaths().keySet()) {
                 Path path = swagger.getPath(pathname);
                 if (path.getOperations() != null) {
@@ -340,6 +419,8 @@ public class SpringCodegen extends AbstractJavaCodegen {
 
     public void setInterfaceOnly(boolean interfaceOnly) { this.interfaceOnly = interfaceOnly; }
 
+    public void setDelegatePattern(boolean delegatePattern) { this.delegatePattern = delegatePattern; }
+
     public void setSingleContentTypes(boolean singleContentTypes) {
         this.singleContentTypes = singleContentTypes;
     }
@@ -348,20 +429,31 @@ public class SpringCodegen extends AbstractJavaCodegen {
 
     public void setAsync(boolean async) { this.async = async; }
 
+    public void setResponseWrapper(String responseWrapper) { this.responseWrapper = responseWrapper; }
+
+    public void setUseTags(boolean useTags) {
+        this.useTags = useTags;
+    }
+
     @Override
     public void postProcessModelProperty(CodegenModel model, CodegenProperty property) {
         super.postProcessModelProperty(model, property);
 
-        if("null".equals(property.example)) {
+        if ("null".equals(property.example)) {
             property.example = null;
         }
 
         //Add imports for Jackson
-        if(!BooleanUtils.toBoolean(model.isEnum)) {
+        if (!Boolean.TRUE.equals(model.isEnum)) {
             model.imports.add("JsonProperty");
 
-            if(BooleanUtils.toBoolean(model.hasEnums)) {
+            if (Boolean.TRUE.equals(model.hasEnums)) {
                 model.imports.add("JsonValue");
+            }
+        } else { // enum class
+            //Needed imports for Jackson's JsonCreator
+            if (additionalProperties.containsKey("jackson")) {
+                model.imports.add("JsonCreator");
             }
         }
     }

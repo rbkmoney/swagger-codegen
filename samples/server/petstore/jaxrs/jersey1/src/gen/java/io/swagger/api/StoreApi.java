@@ -5,8 +5,10 @@ import io.swagger.api.StoreApiService;
 import io.swagger.api.factories.StoreApiServiceFactory;
 
 import io.swagger.annotations.ApiParam;
+import io.swagger.jaxrs.*;
 
 import com.sun.jersey.multipart.FormDataParam;
+import javax.validation.constraints.*;
 
 import java.util.Map;
 import io.swagger.model.Order;

@@ -33,6 +33,10 @@ public class CSharpClientOptionsProvider implements OptionsProvider {
                 .put(CodegenConstants.OPTIONAL_PROJECT_GUID, PACKAGE_GUID_VALUE)
                 .put(CodegenConstants.DOTNET_FRAMEWORK, "4.x")
                 .put(CodegenConstants.OPTIONAL_EMIT_DEFAULT_VALUES, "true")
+                .put(CodegenConstants.HIDE_GENERATION_TIMESTAMP, "true")
+                .put(CodegenConstants.GENERATE_PROPERTY_CHANGED, "true")
+                .put(CodegenConstants.NON_PUBLIC_API, "true")
+                .put(CodegenConstants.INTERFACE_PREFIX, "X")
                 .build();
     }
 

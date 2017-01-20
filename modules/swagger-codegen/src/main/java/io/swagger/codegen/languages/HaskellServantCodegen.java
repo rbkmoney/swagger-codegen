@@ -49,8 +49,10 @@ public class HaskellServantCodegen extends DefaultCodegen implements CodegenConf
     public HaskellServantCodegen() {
         super();
 
-        // override the mapping for "-" (Minus) to keep the original mapping in Haskell
-        specialCharReplacements.put('-', "Dash");
+        // override the mapping to keep the original mapping in Haskell
+        specialCharReplacements.put("-", "Dash");
+        specialCharReplacements.put(">", "GreaterThan");
+        specialCharReplacements.put("<", "LessThan");
 
         // set the output folder here
         outputFolder = "generated-code/haskell-servant";
@@ -152,8 +154,31 @@ public class HaskellServantCodegen extends DefaultCodegen implements CodegenConf
      * @return the escaped term
      */
     @Override
-    public String escapeReservedWord(String name) {
-        return name + "_";
+    public String escapeReservedWord(String name) {           
+        if(this.reservedWordsMappings().containsKey(name)) {
+            return this.reservedWordsMappings().get(name);
+        }
+        return "_" + name;
+    }
+
+    public String firstLetterToUpper(String word) {
+        if (word.length() == 0) {
+            return word;
+        } else if (word.length() == 1) {
+            return word.substring(0, 1).toUpperCase();
+        } else {
+            return word.substring(0, 1).toUpperCase() + word.substring(1);
+        }
+    }
+
+    public String firstLetterToLower(String word) {
+        if (word.length() == 0) {
+            return word;
+        } else if (word.length() == 1) {
+            return word.substring(0, 1).toLowerCase();
+        } else {
+            return word.substring(0, 1).toLowerCase() + word.substring(1);
+        }
     }
 
     @Override
@@ -183,7 +208,7 @@ public class HaskellServantCodegen extends DefaultCodegen implements CodegenConf
         // The API name is made by appending the capitalized words of the title
         List<String> wordsCaps = new ArrayList<String>();
         for (String word : words) {
-            wordsCaps.add(word.substring(0, 1).toUpperCase() + word.substring(1));
+            wordsCaps.add(firstLetterToUpper(word));
         }
         String apiName = joinStrings("", wordsCaps);
 
@@ -194,7 +219,7 @@ public class HaskellServantCodegen extends DefaultCodegen implements CodegenConf
 
 
         additionalProperties.put("title", apiName);
-        additionalProperties.put("titleLower", apiName.substring(0, 1).toLowerCase() + apiName.substring(1));
+        additionalProperties.put("titleLower", firstLetterToLower(apiName));
         additionalProperties.put("package", cabalName);
 
         // Due to the way servant resolves types, we need a high context stack limit
@@ -203,9 +228,9 @@ public class HaskellServantCodegen extends DefaultCodegen implements CodegenConf
         List<Map<String, Object>> replacements = new ArrayList<>();
         Object[] replacementChars = specialCharReplacements.keySet().toArray();
         for(int i = 0; i < replacementChars.length; i++) {
-            Character c = (Character) replacementChars[i];
+            String c = (String) replacementChars[i];
             Map<String, Object> o = new HashMap<>();
-            o.put("char", Character.toString(c));
+            o.put("char", c);
             o.put("replacement", "'" + specialCharReplacements.get(c));
             o.put("hasMore", i != replacementChars.length - 1);
             replacements.add(o);
@@ -471,6 +496,11 @@ public class HaskellServantCodegen extends DefaultCodegen implements CodegenConf
 
         // Create newtypes for things with non-object types
         String dataOrNewtype = "data";
+        // check if it's a ModelImpl before casting 
+        if (!(mod instanceof ModelImpl)) {
+            return model;
+        }
+
         String modelType = ((ModelImpl)  mod).getType();
         if(modelType != "object" && typeMapping.containsKey(modelType)) {
             String newtype = typeMapping.get(modelType);

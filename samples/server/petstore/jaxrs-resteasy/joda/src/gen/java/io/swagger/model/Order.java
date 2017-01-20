@@ -3,13 +3,12 @@ package io.swagger.model;
 import java.util.Objects;
 import java.util.ArrayList;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
+import io.swagger.annotations.ApiModel;
 import org.joda.time.DateTime;
 
 
-
-
-@javax.annotation.Generated(value = "class io.swagger.codegen.languages.JavaResteasyServerCodegen", date = "2016-07-01T21:32:16.906+08:00")
 public class Order   {
   
   private Long id = null;

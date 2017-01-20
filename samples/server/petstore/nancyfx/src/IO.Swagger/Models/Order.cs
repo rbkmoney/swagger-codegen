@@ -8,7 +8,7 @@ using NodaTime;
 namespace IO.Swagger.v2.Models
 {
     /// <summary>
-    /// Order
+    /// An order for a pets from the pet store
     /// </summary>
     public sealed class Order:  IEquatable<Order>
     { 
@@ -155,6 +155,7 @@ namespace IO.Swagger.v2.Models
 
             private void SetupDefaults()
             {
+                _Complete = false;
             }
 
             /// <summary>

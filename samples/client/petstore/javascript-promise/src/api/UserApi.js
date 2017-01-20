@@ -9,17 +9,6 @@
  * https://github.com/swagger-api/swagger-codegen.git
  * Do not edit the class manually.
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
  */
 
 (function(root, factory) {
@@ -61,13 +50,14 @@
      * Create user
      * This can only be done by the logged in user.
      * @param {module:model/User} body Created user object
+     * @return {Promise} a {@link https://www.promisejs.org/|Promise}
      */
     this.createUser = function(body) {
       var postBody = body;
 
       // verify the required parameter 'body' is set
       if (body == undefined || body == null) {
-        throw "Missing the required parameter 'body' when calling createUser";
+        throw new Error("Missing the required parameter 'body' when calling createUser");
       }
 
 
@@ -97,13 +87,14 @@
      * Creates list of users with given input array
      * 
      * @param {Array.<module:model/User>} body List of user object
+     * @return {Promise} a {@link https://www.promisejs.org/|Promise}
      */
     this.createUsersWithArrayInput = function(body) {
       var postBody = body;
 
       // verify the required parameter 'body' is set
       if (body == undefined || body == null) {
-        throw "Missing the required parameter 'body' when calling createUsersWithArrayInput";
+        throw new Error("Missing the required parameter 'body' when calling createUsersWithArrayInput");
       }
 
 
@@ -133,13 +124,14 @@
      * Creates list of users with given input array
      * 
      * @param {Array.<module:model/User>} body List of user object
+     * @return {Promise} a {@link https://www.promisejs.org/|Promise}
      */
     this.createUsersWithListInput = function(body) {
       var postBody = body;
 
       // verify the required parameter 'body' is set
       if (body == undefined || body == null) {
-        throw "Missing the required parameter 'body' when calling createUsersWithListInput";
+        throw new Error("Missing the required parameter 'body' when calling createUsersWithListInput");
       }
 
 
@@ -169,13 +161,14 @@
      * Delete user
      * This can only be done by the logged in user.
      * @param {String} username The name that needs to be deleted
+     * @return {Promise} a {@link https://www.promisejs.org/|Promise}
      */
     this.deleteUser = function(username) {
       var postBody = null;
 
       // verify the required parameter 'username' is set
       if (username == undefined || username == null) {
-        throw "Missing the required parameter 'username' when calling deleteUser";
+        throw new Error("Missing the required parameter 'username' when calling deleteUser");
       }
 
 
@@ -206,14 +199,14 @@
      * Get user by user name
      * 
      * @param {String} username The name that needs to be fetched. Use user1 for testing. 
-     * data is of type: {module:model/User}
+     * @return {Promise} a {@link https://www.promisejs.org/|Promise}, with data of type {@link module:model/User}
      */
     this.getUserByName = function(username) {
       var postBody = null;
 
       // verify the required parameter 'username' is set
       if (username == undefined || username == null) {
-        throw "Missing the required parameter 'username' when calling getUserByName";
+        throw new Error("Missing the required parameter 'username' when calling getUserByName");
       }
 
 
@@ -245,19 +238,19 @@
      * 
      * @param {String} username The user name for login
      * @param {String} password The password for login in clear text
-     * data is of type: {'String'}
+     * @return {Promise} a {@link https://www.promisejs.org/|Promise}, with data of type {@link 'String'}
      */
     this.loginUser = function(username, password) {
       var postBody = null;
 
       // verify the required parameter 'username' is set
       if (username == undefined || username == null) {
-        throw "Missing the required parameter 'username' when calling loginUser";
+        throw new Error("Missing the required parameter 'username' when calling loginUser");
       }
 
       // verify the required parameter 'password' is set
       if (password == undefined || password == null) {
-        throw "Missing the required parameter 'password' when calling loginUser";
+        throw new Error("Missing the required parameter 'password' when calling loginUser");
       }
 
 
@@ -288,6 +281,7 @@
     /**
      * Logs out current logged in user session
      * 
+     * @return {Promise} a {@link https://www.promisejs.org/|Promise}
      */
     this.logoutUser = function() {
       var postBody = null;
@@ -320,18 +314,19 @@
      * This can only be done by the logged in user.
      * @param {String} username name that need to be deleted
      * @param {module:model/User} body Updated user object
+     * @return {Promise} a {@link https://www.promisejs.org/|Promise}
      */
     this.updateUser = function(username, body) {
       var postBody = body;
 
       // verify the required parameter 'username' is set
       if (username == undefined || username == null) {
-        throw "Missing the required parameter 'username' when calling updateUser";
+        throw new Error("Missing the required parameter 'username' when calling updateUser");
       }
 
       // verify the required parameter 'body' is set
       if (body == undefined || body == null) {
-        throw "Missing the required parameter 'body' when calling updateUser";
+        throw new Error("Missing the required parameter 'body' when calling updateUser");
       }
 
 

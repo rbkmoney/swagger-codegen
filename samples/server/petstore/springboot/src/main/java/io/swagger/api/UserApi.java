@@ -1,7 +1,7 @@
 package io.swagger.api;
 
-import io.swagger.model.User;
 import java.util.List;
+import io.swagger.model.User;
 
 import io.swagger.annotations.*;
 import org.springframework.http.ResponseEntity;
@@ -75,7 +75,8 @@ public interface UserApi {
     @RequestMapping(value = "/user/login",
         produces = { "application/xml", "application/json" }, 
         method = RequestMethod.GET)
-    ResponseEntity<String> loginUser(@ApiParam(value = "The user name for login", required = true) @RequestParam(value = "username", required = true) String username,@ApiParam(value = "The password for login in clear text", required = true) @RequestParam(value = "password", required = true) String password);
+    ResponseEntity<String> loginUser(@ApiParam(value = "The user name for login", required = true) @RequestParam(value = "username", required = true) String username,
+        @ApiParam(value = "The password for login in clear text", required = true) @RequestParam(value = "password", required = true) String password);
 
 
     @ApiOperation(value = "Logs out current logged in user session", notes = "", response = Void.class, tags={ "user", })
@@ -94,6 +95,7 @@ public interface UserApi {
     @RequestMapping(value = "/user/{username}",
         produces = { "application/xml", "application/json" }, 
         method = RequestMethod.PUT)
-    ResponseEntity<Void> updateUser(@ApiParam(value = "name that need to be deleted",required=true ) @PathVariable("username") String username,@ApiParam(value = "Updated user object" ,required=true ) @RequestBody User body);
+    ResponseEntity<Void> updateUser(@ApiParam(value = "name that need to be deleted",required=true ) @PathVariable("username") String username,
+        @ApiParam(value = "Updated user object" ,required=true ) @RequestBody User body);
 
 }

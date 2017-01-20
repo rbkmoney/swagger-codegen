@@ -15,6 +15,14 @@
     <maven>2.2.0</maven>
   </prerequisites>
 
+  <licenses>
+    <license>
+      <name>{{licenseName}}</name>
+      <url>{{licenseUrl}}</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+
   <build>
     <plugins>
       <plugin>
@@ -95,6 +103,11 @@
           </execution>
         </executions>
       </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-javadoc-plugin</artifactId>
+        <version>2.10.4</version>
+      </plugin>
     </plugins>
   </build>
   <dependencies>
@@ -119,6 +132,11 @@
         <groupId>com.netflix.feign</groupId>
         <artifactId>feign-slf4j</artifactId>
         <version>${feign-version}</version>
+    </dependency>
+    <dependency>
+        <groupId>io.github.openfeign.form</groupId>
+        <artifactId>feign-form</artifactId>
+        <version>${feign-form-version}</version>
     </dependency>
 
     <!-- JSON processing: jackson -->
@@ -162,6 +180,7 @@
     <maven.compiler.target>${java.version}</maven.compiler.target>
     <swagger-core-version>1.5.9</swagger-core-version>
     <feign-version>8.17.0</feign-version>
+    <feign-form-version>2.0.2</feign-form-version>
     <jackson-version>2.7.5</jackson-version>
     <junit-version>4.12</junit-version>
     <maven-plugin-version>1.0.0</maven-plugin-version>

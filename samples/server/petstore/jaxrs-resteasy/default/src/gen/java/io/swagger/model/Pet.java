@@ -3,15 +3,14 @@ package io.swagger.model;
 import java.util.Objects;
 import java.util.ArrayList;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
+import io.swagger.annotations.ApiModel;
 import io.swagger.model.Category;
 import io.swagger.model.Tag;
 import java.util.List;
+import javax.validation.constraints.*;
 
-
-
-
-@javax.annotation.Generated(value = "class io.swagger.codegen.languages.JavaResteasyServerCodegen", date = "2016-07-01T21:32:05.980+08:00")
 public class Pet   {
   
   private Long id = null;
@@ -70,6 +69,7 @@ public class Pet   {
    **/
   
   @JsonProperty("name")
+  @NotNull
   public String getName() {
     return name;
   }
@@ -81,6 +81,7 @@ public class Pet   {
    **/
   
   @JsonProperty("photoUrls")
+  @NotNull
   public List<String> getPhotoUrls() {
     return photoUrls;
   }

@@ -16,11 +16,12 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.SecurityContext;
 import javax.ws.rs.*;
+import javax.validation.constraints.*;
 
 @Path("/store")
 
 
-@javax.annotation.Generated(value = "class io.swagger.codegen.languages.JavaResteasyServerCodegen", date = "2016-07-01T21:32:05.980+08:00")
+
 public class StoreApi  {
    private final StoreApiService delegate = StoreApiServiceFactory.getStoreApi();
 
@@ -28,7 +29,7 @@ public class StoreApi  {
     @Path("/order/{orderId}")
     
     @Produces({ "application/xml", "application/json" })
-    public Response deleteOrder( @PathParam("orderId") String orderId,@Context SecurityContext securityContext)
+    public Response deleteOrder( @Min(1) @PathParam("orderId") String orderId,@Context SecurityContext securityContext)
     throws NotFoundException {
         return delegate.deleteOrder(orderId,securityContext);
     }
@@ -44,7 +45,7 @@ public class StoreApi  {
     @Path("/order/{orderId}")
     
     @Produces({ "application/xml", "application/json" })
-    public Response getOrderById( @PathParam("orderId") Long orderId,@Context SecurityContext securityContext)
+    public Response getOrderById( @Min(1) @Max(5) @PathParam("orderId") Long orderId,@Context SecurityContext securityContext)
     throws NotFoundException {
         return delegate.getOrderById(orderId,securityContext);
     }

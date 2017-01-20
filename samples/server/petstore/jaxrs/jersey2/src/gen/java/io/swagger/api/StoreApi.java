@@ -5,6 +5,7 @@ import io.swagger.api.StoreApiService;
 import io.swagger.api.factories.StoreApiServiceFactory;
 
 import io.swagger.annotations.ApiParam;
+import io.swagger.jaxrs.*;
 
 import java.util.Map;
 import io.swagger.model.Order;
@@ -21,6 +22,7 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.SecurityContext;
 import javax.ws.rs.*;
+import javax.validation.constraints.*;
 
 @Path("/store")
 

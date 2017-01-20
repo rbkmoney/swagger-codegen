@@ -5,10 +5,11 @@ import io.swagger.api.PetApiService;
 import io.swagger.api.factories.PetApiServiceFactory;
 
 import io.swagger.annotations.ApiParam;
+import io.swagger.jaxrs.*;
 
-import io.swagger.model.Pet;
 import java.io.File;
 import io.swagger.model.ModelApiResponse;
+import io.swagger.model.Pet;
 
 import java.util.List;
 import io.swagger.api.NotFoundException;
@@ -22,6 +23,7 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.SecurityContext;
 import javax.ws.rs.*;
+import javax.validation.constraints.*;
 
 @Path("/pet")
 
@@ -80,7 +82,7 @@ public class PetApi  {
         @io.swagger.annotations.ApiResponse(code = 200, message = "successful operation", response = Pet.class, responseContainer = "List"),
         
         @io.swagger.annotations.ApiResponse(code = 400, message = "Invalid status value", response = Pet.class, responseContainer = "List") })
-    public Response findPetsByStatus(@ApiParam(value = "Status values that need to be considered for filter",required=true) @QueryParam("status") List<String> status
+    public Response findPetsByStatus(@ApiParam(value = "Status values that need to be considered for filter",required=true, allowableValues="available, pending, sold") @QueryParam("status") List<String> status
 ,@Context SecurityContext securityContext)
     throws NotFoundException {
         return delegate.findPetsByStatus(status,securityContext);
@@ -156,8 +158,8 @@ public class PetApi  {
     @io.swagger.annotations.ApiResponses(value = { 
         @io.swagger.annotations.ApiResponse(code = 405, message = "Invalid input", response = void.class) })
     public Response updatePetWithForm(@ApiParam(value = "ID of pet that needs to be updated",required=true) @PathParam("petId") Long petId
-,@ApiParam(value = "Updated name of the pet")@FormParam("name")  String name
-,@ApiParam(value = "Updated status of the pet")@FormParam("status")  String status
+,@ApiParam(value = "Updated name of the pet")  @FormParam("name")  String name
+,@ApiParam(value = "Updated status of the pet")  @FormParam("status")  String status
 ,@Context SecurityContext securityContext)
     throws NotFoundException {
         return delegate.updatePetWithForm(petId,name,status,securityContext);

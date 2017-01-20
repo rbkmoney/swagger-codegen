@@ -11,7 +11,7 @@ Add to your `build->plugins` section (default phase is `generate-sources` phase)
 <plugin>
     <groupId>io.swagger</groupId>
     <artifactId>swagger-codegen-maven-plugin</artifactId>
-    <version>2.1.5-SNAPSHOT</version>
+    <version>2.2.2-SNAPSHOT</version>
     <executions>
         <execution>
             <goals>
@@ -45,9 +45,11 @@ mvn clean compile
 - `modelPackage` - the package to use for generated model objects/classes
 - `apiPackage` - the package to use for generated api objects/classes
 - `invokerPackage` - the package to use for the generated invoker objects
-- `modelNamePrefix` and `modelNameSuffix` - Sets the pre- or suffix for model classes and enums.
+- `modelNamePrefix` and `modelNameSuffix` - Sets the pre- or suffix for model classes and enums
+- `useJaxbAnnotations` - enable Jaxb annotations inside the generated models
 - `configOptions` - a map of language-specific parameters (see below)
 - `configHelp` - dumps the configuration help for the specified library (generates no sources)
+- `ignoreFileOverride` - specifies the full path to a `.swagger-codegen-ignore` used for pattern based overrides of generated outputs
 
 ### Custom Generator
 

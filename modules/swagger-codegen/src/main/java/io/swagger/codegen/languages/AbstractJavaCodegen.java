@@ -1,20 +1,43 @@
 package io.swagger.codegen.languages;
 
+import java.io.File;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.ListIterator;
+import java.util.Map;
+import java.util.regex.Pattern;
+
+import org.apache.commons.lang3.BooleanUtils;
+import org.apache.commons.lang3.StringUtils;
+
 import com.google.common.base.Strings;
-import io.swagger.codegen.*;
+
+import io.swagger.codegen.CliOption;
+import io.swagger.codegen.CodegenConfig;
+import io.swagger.codegen.CodegenConstants;
+import io.swagger.codegen.CodegenModel;
+import io.swagger.codegen.CodegenOperation;
+import io.swagger.codegen.CodegenParameter;
+import io.swagger.codegen.CodegenProperty;
+import io.swagger.codegen.DefaultCodegen;
 import io.swagger.models.Model;
 import io.swagger.models.Operation;
 import io.swagger.models.Path;
 import io.swagger.models.Swagger;
 import io.swagger.models.parameters.FormParameter;
 import io.swagger.models.parameters.Parameter;
-import io.swagger.models.properties.*;
-import org.apache.commons.lang3.BooleanUtils;
-import org.apache.commons.lang3.StringUtils;
-
-import java.io.File;
-import java.util.*;
-import java.util.regex.Pattern;
+import io.swagger.models.properties.ArrayProperty;
+import io.swagger.models.properties.BooleanProperty;
+import io.swagger.models.properties.DoubleProperty;
+import io.swagger.models.properties.FloatProperty;
+import io.swagger.models.properties.IntegerProperty;
+import io.swagger.models.properties.LongProperty;
+import io.swagger.models.properties.MapProperty;
+import io.swagger.models.properties.Property;
+import io.swagger.models.properties.StringProperty;
 
 
 public abstract class AbstractJavaCodegen extends DefaultCodegen implements CodegenConfig {
@@ -22,12 +45,15 @@ public abstract class AbstractJavaCodegen extends DefaultCodegen implements Code
     public static final String FULL_JAVA_UTIL = "fullJavaUtil";
     public static final String DEFAULT_LIBRARY = "<default>";
     public static final String DATE_LIBRARY = "dateLibrary";
+    public static final String SUPPORT_JAVA6 = "supportJava6";
 
     protected String dateLibrary = "joda";
     protected String invokerPackage = "io.swagger";
     protected String groupId = "io.swagger";
     protected String artifactId = "swagger-java";
     protected String artifactVersion = "1.0.0";
+    protected String licenseName = "Unlicense";
+    protected String licenseUrl = "http://unlicense.org";
     protected String projectFolder = "src" + File.separator + "main";
     protected String projectTestFolder = "src" + File.separator + "test";
     protected String sourceFolder = projectFolder + File.separator + "java";
@@ -40,6 +66,7 @@ public abstract class AbstractJavaCodegen extends DefaultCodegen implements Code
     protected boolean hideGenerationTimestamp = false;
     protected String apiDocPath = "docs/";
     protected String modelDocPath = "docs/";
+    protected boolean supportJava6= false;
 
     public AbstractJavaCodegen() {
         super();
@@ -92,6 +119,8 @@ public abstract class AbstractJavaCodegen extends DefaultCodegen implements Code
         cliOptions.add(new CliOption(CodegenConstants.GROUP_ID, CodegenConstants.GROUP_ID_DESC));
         cliOptions.add(new CliOption(CodegenConstants.ARTIFACT_ID, CodegenConstants.ARTIFACT_ID_DESC));
         cliOptions.add(new CliOption(CodegenConstants.ARTIFACT_VERSION, CodegenConstants.ARTIFACT_VERSION_DESC));
+        cliOptions.add(new CliOption(CodegenConstants.LICENSE_NAME, CodegenConstants.LICENSE_NAME_DESC));
+        cliOptions.add(new CliOption(CodegenConstants.LICENSE_URL, CodegenConstants.LICENSE_URL_DESC));
         cliOptions.add(new CliOption(CodegenConstants.SOURCE_FOLDER, CodegenConstants.SOURCE_FOLDER_DESC));
         cliOptions.add(new CliOption(CodegenConstants.LOCAL_VARIABLE_PREFIX, CodegenConstants.LOCAL_VARIABLE_PREFIX_DESC));
         cliOptions.add(CliOption.newBoolean(CodegenConstants.SERIALIZABLE_MODEL, CodegenConstants.SERIALIZABLE_MODEL_DESC));
@@ -115,6 +144,12 @@ public abstract class AbstractJavaCodegen extends DefaultCodegen implements Code
     @Override
     public void processOpts() {
         super.processOpts();
+
+        if (additionalProperties.containsKey(SUPPORT_JAVA6)) {
+            this.setSupportJava6(Boolean.valueOf(additionalProperties.get(SUPPORT_JAVA6).toString()));
+        }
+        additionalProperties.put(SUPPORT_JAVA6, supportJava6);
+
 
         if (additionalProperties.containsKey(CodegenConstants.INVOKER_PACKAGE)) {
             this.setInvokerPackage((String) additionalProperties.get(CodegenConstants.INVOKER_PACKAGE));
@@ -154,6 +189,18 @@ public abstract class AbstractJavaCodegen extends DefaultCodegen implements Code
         } else {
             //not set, use to be passed to template
             additionalProperties.put(CodegenConstants.ARTIFACT_VERSION, artifactVersion);
+        }
+
+        if (additionalProperties.containsKey(CodegenConstants.LICENSE_NAME)) {
+            this.setLicenseName((String) additionalProperties.get(CodegenConstants.LICENSE_NAME));
+        } else {
+            additionalProperties.put(CodegenConstants.LICENSE_NAME, licenseName);
+        }
+
+        if (additionalProperties.containsKey(CodegenConstants.LICENSE_URL)) {
+            this.setLicenseUrl((String) additionalProperties.get(CodegenConstants.LICENSE_URL));
+        } else {
+            additionalProperties.put(CodegenConstants.LICENSE_URL, licenseUrl);
         }
 
         if (additionalProperties.containsKey(CodegenConstants.SOURCE_FOLDER)) {
@@ -222,10 +269,16 @@ public abstract class AbstractJavaCodegen extends DefaultCodegen implements Code
         importMapping.put("ApiModelProperty", "io.swagger.annotations.ApiModelProperty");
         importMapping.put("ApiModel", "io.swagger.annotations.ApiModel");
         importMapping.put("JsonProperty", "com.fasterxml.jackson.annotation.JsonProperty");
+        importMapping.put("JsonSubTypes", "com.fasterxml.jackson.annotation.JsonSubTypes");
+        importMapping.put("JsonTypeInfo", "com.fasterxml.jackson.annotation.JsonTypeInfo");
+        importMapping.put("JsonCreator", "com.fasterxml.jackson.annotation.JsonCreator");
         importMapping.put("JsonValue", "com.fasterxml.jackson.annotation.JsonValue");
         importMapping.put("SerializedName", "com.google.gson.annotations.SerializedName");
         importMapping.put("Objects", "java.util.Objects");
         importMapping.put("StringUtil", invokerPackage + ".StringUtil");
+        // import JsonCreator if JsonProperty is imported
+        // used later in recursive import in postProcessingModels
+        importMapping.put("com.fasterxml.jackson.annotation.JsonProperty", "com.fasterxml.jackson.annotation.JsonCreator");
 
         if(additionalProperties.containsKey(DATE_LIBRARY)) {
             setDateLibrary(additionalProperties.get("dateLibrary").toString());
@@ -238,8 +291,7 @@ public abstract class AbstractJavaCodegen extends DefaultCodegen implements Code
 
             importMapping.put("LocalDate", "org.joda.time.LocalDate");
             importMapping.put("DateTime", "org.joda.time.DateTime");
-        }
-        else if (dateLibrary.startsWith("java8")) {
+        } else if (dateLibrary.startsWith("java8")) {
             additionalProperties.put("java8", "true");
             typeMapping.put("date", "LocalDate");
             importMapping.put("LocalDate", "java.time.LocalDate");
@@ -250,6 +302,8 @@ public abstract class AbstractJavaCodegen extends DefaultCodegen implements Code
                 typeMapping.put("DateTime", "OffsetDateTime");
                 importMapping.put("OffsetDateTime", "java.time.OffsetDateTime");
             }
+        } else if (dateLibrary.equals("legacy")) {
+            additionalProperties.put("legacyDates", "true");
         }
     }
 
@@ -274,7 +328,10 @@ public abstract class AbstractJavaCodegen extends DefaultCodegen implements Code
     }
 
     @Override
-    public String escapeReservedWord(String name) {
+    public String escapeReservedWord(String name) {           
+        if(this.reservedWordsMappings().containsKey(name)) {
+            return this.reservedWordsMappings().get(name);
+        }
         return "_" + name;
     }
 
@@ -323,8 +380,8 @@ public abstract class AbstractJavaCodegen extends DefaultCodegen implements Code
         // sanitize name
         name = sanitizeName(name); // FIXME: a parameter should not be assigned. Also declare the methods parameters as 'final'.
 
-        if ("class".equals(name.toLowerCase())) {
-            return "PropertyClass";
+        if (name.toLowerCase().matches("^_*class$")) {
+            return "propertyClass";
         }
 
         if("_".equals(name)) {
@@ -334,6 +391,10 @@ public abstract class AbstractJavaCodegen extends DefaultCodegen implements Code
         // if it's all uppper case, do nothing
         if (name.matches("^[A-Z_]*$")) {
             return name;
+        }
+
+        if(startsWithTwoUppercaseLetters(name)){
+            name = name.substring(0, 2).toLowerCase() + name.substring(2);
         }
 
         // camelize (lower first character) the variable name
@@ -348,8 +409,21 @@ public abstract class AbstractJavaCodegen extends DefaultCodegen implements Code
         return name;
     }
 
+    private boolean startsWithTwoUppercaseLetters(String name) {
+        boolean startsWithTwoUppercaseLetters = false;
+        if(name.length() > 1) {
+            startsWithTwoUppercaseLetters = name.substring(0, 2).equals(name.substring(0, 2).toUpperCase());
+        }
+        return startsWithTwoUppercaseLetters;
+    }
+
     @Override
     public String toParamName(String name) {
+        // to avoid conflicts with 'callback' parameter for async call
+        if ("callback".equals(name)) {
+            return "paramCallback";
+        }
+
         // should be the same as variable name
         return toVarName(name);
     }
@@ -390,11 +464,20 @@ public abstract class AbstractJavaCodegen extends DefaultCodegen implements Code
         if (p instanceof ArrayProperty) {
             ArrayProperty ap = (ArrayProperty) p;
             Property inner = ap.getItems();
+            if (inner == null) {
+                LOGGER.warn(ap.getName() + "(array property) does not have a proper inner type defined");
+                // TODO maybe better defaulting to StringProperty than returning null
+                return null;
+            }
             return getSwaggerType(p) + "<" + getTypeDeclaration(inner) + ">";
         } else if (p instanceof MapProperty) {
             MapProperty mp = (MapProperty) p;
             Property inner = mp.getAdditionalProperties();
-
+            if (inner == null) {
+                LOGGER.warn(mp.getName() + "(map property) does not have a proper inner type defined");
+                // TODO maybe better defaulting to StringProperty than returning null
+                return null;
+            }
             return getSwaggerType(p) + "<String, " + getTypeDeclaration(inner) + ">";
         }
         return super.getTypeDeclaration(p);
@@ -410,6 +493,9 @@ public abstract class AbstractJavaCodegen extends DefaultCodegen implements Code
             } else {
                 pattern = "new ArrayList<%s>()";
             }
+            if (ap.getItems() == null) {
+                return null;
+            }
             return String.format(pattern, getTypeDeclaration(ap.getItems()));
         } else if (p instanceof MapProperty) {
             final MapProperty ap = (MapProperty) p;
@@ -418,6 +504,9 @@ public abstract class AbstractJavaCodegen extends DefaultCodegen implements Code
                 pattern = "new java.util.HashMap<String, %s>()";
             } else {
                 pattern = "new HashMap<String, %s>()";
+            }
+            if (ap.getAdditionalProperties() == null) {
+                return null;
             }
             return String.format(pattern, getTypeDeclaration(ap.getAdditionalProperties()));
         } else if (p instanceof IntegerProperty) {
@@ -533,21 +622,16 @@ public abstract class AbstractJavaCodegen extends DefaultCodegen implements Code
     @Override
     public String getSwaggerType(Property p) {
         String swaggerType = super.getSwaggerType(p);
-        String type;
+
+        // don't apply renaming on types from the typeMapping
         if (typeMapping.containsKey(swaggerType)) {
-            type = typeMapping.get(swaggerType);
-            if (languageSpecificPrimitives.contains(type) || type.indexOf(".") >= 0 ||
-                type.equals("Map") || type.equals("List") ||
-                type.equals("File") || type.equals("Date")) {
-                return type;
-            }
-        } else {
-            type = swaggerType;
+            return typeMapping.get(swaggerType);
         }
-        if (null == type) {
+
+        if (null == swaggerType) {
             LOGGER.error("No Type defined for Property " + p);
         }
-        return toModelName(type);
+        return toModelName(swaggerType);
     }
 
     @Override
@@ -575,12 +659,15 @@ public abstract class AbstractJavaCodegen extends DefaultCodegen implements Code
         if(codegenModel.description != null) {
             codegenModel.imports.add("ApiModel");
         }
-        if (allDefinitions != null && codegenModel != null && codegenModel.parentSchema != null && codegenModel.hasEnums) {
+        if (codegenModel.discriminator != null && additionalProperties.containsKey("jackson")) {
+            codegenModel.imports.add("JsonSubTypes");
+            codegenModel.imports.add("JsonTypeInfo");
+        }
+        if (allDefinitions != null && codegenModel.parentSchema != null && codegenModel.hasEnums) {
             final Model parentModel = allDefinitions.get(codegenModel.parentSchema);
             final CodegenModel parentCodegenModel = super.fromModel(codegenModel.parent, parentModel);
             codegenModel = AbstractJavaCodegen.reconcileInlineEnums(codegenModel, parentCodegenModel);
         }
-
         return codegenModel;
     }
 
@@ -608,7 +695,6 @@ public abstract class AbstractJavaCodegen extends DefaultCodegen implements Code
             model.imports.add("ApiModelProperty");
             model.imports.add("ApiModel");
         }
-        return;
     }
 
     @Override
@@ -616,6 +702,23 @@ public abstract class AbstractJavaCodegen extends DefaultCodegen implements Code
 
     @Override
     public Map<String, Object> postProcessModels(Map<String, Object> objs) {
+        // recursively add import for mapping one type to multiple imports
+        List<Map<String, String>> recursiveImports = (List<Map<String, String>>) objs.get("imports");
+        if (recursiveImports == null)
+            return objs;
+
+        ListIterator<Map<String, String>> listIterator = recursiveImports.listIterator();
+        while (listIterator.hasNext()) {
+            String _import = listIterator.next().get("import");
+            // if the import package happens to be found in the importMapping (key)
+            // add the corresponding import package to the list
+            if (importMapping.containsKey(_import)) {
+                Map<String, String> newImportMap= new HashMap<String, String>();
+                newImportMap.put("import", importMapping.get(_import));
+                listIterator.add(newImportMap);
+            }
+        }
+
         return postProcessModelsEnum(objs);
     }
 
@@ -636,26 +739,27 @@ public abstract class AbstractJavaCodegen extends DefaultCodegen implements Code
 
     @Override
     public void preprocessSwagger(Swagger swagger) {
-        if (swagger != null && swagger.getPaths() != null) {
-            for (String pathname : swagger.getPaths().keySet()) {
-                Path path = swagger.getPath(pathname);
-                if (path.getOperations() != null) {
-                    for (Operation operation : path.getOperations()) {
-                        boolean hasFormParameters = false;
-                        for (Parameter parameter : operation.getParameters()) {
-                            if (parameter instanceof FormParameter) {
-                                hasFormParameters = true;
-                            }
-                        }
-
-                        String defaultContentType = hasFormParameters ? "application/x-www-form-urlencoded" : "application/json";
-                        String contentType = operation.getConsumes() == null || operation.getConsumes().isEmpty()
-                                ? defaultContentType : operation.getConsumes().get(0);
-                        String accepts = getAccept(operation);
-                        operation.setVendorExtension("x-contentType", contentType);
-                        operation.setVendorExtension("x-accepts", accepts);
+        if (swagger == null || swagger.getPaths() == null){
+            return;
+        }
+        for (String pathname : swagger.getPaths().keySet()) {
+            Path path = swagger.getPath(pathname);
+            if (path.getOperations() == null){
+                continue;
+            }
+            for (Operation operation : path.getOperations()) {
+                boolean hasFormParameters = false;
+                for (Parameter parameter : operation.getParameters()) {
+                    if (parameter instanceof FormParameter) {
+                        hasFormParameters = true;
                     }
                 }
+                String defaultContentType = hasFormParameters ? "application/x-www-form-urlencoded" : "application/json";
+                String contentType = operation.getConsumes() == null || operation.getConsumes().isEmpty()
+                        ? defaultContentType : operation.getConsumes().get(0);
+                String accepts = getAccept(operation);
+                operation.setVendorExtension("x-contentType", contentType);
+                operation.setVendorExtension("x-accepts", accepts);
             }
         }
     }
@@ -707,6 +811,15 @@ public abstract class AbstractJavaCodegen extends DefaultCodegen implements Code
 
     @Override
     public String toEnumVarName(String value, String datatype) {
+        if (value.length() == 0) {
+            return "EMPTY";
+        }
+
+        // for symbol, e.g. $, #
+        if (getSymbolName(value) != null) {
+            return getSymbolName(value).toUpperCase();
+        }
+
         // number
         if ("Integer".equals(datatype) || "Long".equals(datatype) ||
             "Float".equals(datatype) || "Double".equals(datatype)) {
@@ -718,7 +831,7 @@ public abstract class AbstractJavaCodegen extends DefaultCodegen implements Code
         }
 
         // string
-        String var = value.replaceAll("\\W+", "_").replaceAll("_+", "_").toUpperCase();
+        String var = value.replaceAll("\\W+", "_").toUpperCase();
         if (var.matches("\\d.*")) {
             return "_" + var;
         } else {
@@ -739,12 +852,10 @@ public abstract class AbstractJavaCodegen extends DefaultCodegen implements Code
     @Override
     public CodegenOperation fromOperation(String path, String httpMethod, Operation operation, Map<String, Model> definitions, Swagger swagger) {
         CodegenOperation op = super.fromOperation(path, httpMethod, operation, definitions, swagger);
-
         op.path = sanitizePath(op.path);
-        
         return op;
     }
-    
+
     private static CodegenModel reconcileInlineEnums(CodegenModel codegenModel, CodegenModel parentCodegenModel) {
         // This generator uses inline classes to define enums, which breaks when
         // dealing with models that have subTypes. To clean this up, we will analyze
@@ -753,43 +864,43 @@ public abstract class AbstractJavaCodegen extends DefaultCodegen implements Code
         // Because the child models extend the parents, the enums will be available via the parent.
 
         // Only bother with reconciliation if the parent model has enums.
-        if (parentCodegenModel.hasEnums) {
+        if  (!parentCodegenModel.hasEnums) {
+            return codegenModel;
+        }
 
-            // Get the properties for the parent and child models
-            final List<CodegenProperty> parentModelCodegenProperties = parentCodegenModel.vars;
-            List<CodegenProperty> codegenProperties = codegenModel.vars;
+        // Get the properties for the parent and child models
+        final List<CodegenProperty> parentModelCodegenProperties = parentCodegenModel.vars;
+        List<CodegenProperty> codegenProperties = codegenModel.vars;
 
-            // Iterate over all of the parent model properties
-            boolean removedChildEnum = false;
-            for (CodegenProperty parentModelCodegenPropery : parentModelCodegenProperties) {
-                // Look for enums
-                if (parentModelCodegenPropery.isEnum) {
-                    // Now that we have found an enum in the parent class,
-                    // and search the child class for the same enum.
-                    Iterator<CodegenProperty> iterator = codegenProperties.iterator();
-                    while (iterator.hasNext()) {
-                        CodegenProperty codegenProperty = iterator.next();
-                        if (codegenProperty.isEnum && codegenProperty.equals(parentModelCodegenPropery)) {
-                            // We found an enum in the child class that is
-                            // a duplicate of the one in the parent, so remove it.
-                            iterator.remove();
-                            removedChildEnum = true;
-                        }
+        // Iterate over all of the parent model properties
+        boolean removedChildEnum = false;
+        for (CodegenProperty parentModelCodegenPropery : parentModelCodegenProperties) {
+            // Look for enums
+            if (parentModelCodegenPropery.isEnum) {
+                // Now that we have found an enum in the parent class,
+                // and search the child class for the same enum.
+                Iterator<CodegenProperty> iterator = codegenProperties.iterator();
+                while (iterator.hasNext()) {
+                    CodegenProperty codegenProperty = iterator.next();
+                    if (codegenProperty.isEnum && codegenProperty.equals(parentModelCodegenPropery)) {
+                        // We found an enum in the child class that is
+                        // a duplicate of the one in the parent, so remove it.
+                        iterator.remove();
+                        removedChildEnum = true;
                     }
                 }
             }
-
-            if(removedChildEnum) {
-                // If we removed an entry from this model's vars, we need to ensure hasMore is updated
-                int count = 0, numVars = codegenProperties.size();
-                for(CodegenProperty codegenProperty : codegenProperties) {
-                    count += 1;
-                    codegenProperty.hasMore = (count < numVars) ? true : null;
-                }
-                codegenModel.vars = codegenProperties;
-            }
         }
 
+        if(removedChildEnum) {
+            // If we removed an entry from this model's vars, we need to ensure hasMore is updated
+            int count = 0, numVars = codegenProperties.size();
+            for(CodegenProperty codegenProperty : codegenProperties) {
+                count += 1;
+                codegenProperty.hasMore = (count < numVars) ? true : false;
+            }
+            codegenModel.vars = codegenProperties;
+        }
         return codegenModel;
     }
 
@@ -818,8 +929,20 @@ public abstract class AbstractJavaCodegen extends DefaultCodegen implements Code
         this.artifactVersion = artifactVersion;
     }
 
+    public void setLicenseName(String licenseName) {
+        this.licenseName = licenseName;
+    }
+
+    public void setLicenseUrl(String licenseUrl) {
+        this.licenseUrl = licenseUrl;
+    }
+
     public void setSourceFolder(String sourceFolder) {
         this.sourceFolder = sourceFolder;
+    }
+
+    public void setTestFolder(String testFolder) {
+        this.testFolder = testFolder;
     }
 
     public void setLocalVariablePrefix(String localVariablePrefix) {
@@ -875,6 +998,27 @@ public abstract class AbstractJavaCodegen extends DefaultCodegen implements Code
             delim = ".";
         }
         return sb.toString();
+    }
+
+    public void setSupportJava6(boolean value) {
+        this.supportJava6 = value;
+    }
+
+    public String toRegularExpression(String pattern) {
+        return escapeText(pattern);
+    }
+    
+    public boolean convertPropertyToBoolean(String propertyKey) {
+          boolean booleanValue = false;
+          if (additionalProperties.containsKey(propertyKey)) {
+              booleanValue = Boolean.valueOf(additionalProperties.get(propertyKey).toString());
+       }
+ 
+       return booleanValue;
+    }
+    
+    public void writePropertyBack(String propertyKey, boolean value) {
+        additionalProperties.put(propertyKey, value);
     }
 
 }

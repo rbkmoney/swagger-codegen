@@ -70,6 +70,19 @@ public class JavascriptClosureAngularClientCodegen extends DefaultCodegen implem
         embeddedTemplateDir = templateDir = "Javascript-Closure-Angular";
         apiPackage = "API.Client";
         modelPackage = "API.Client";
+
+        cliOptions.add(new CliOption(CodegenConstants.HIDE_GENERATION_TIMESTAMP, "hides the timestamp when files were generated")
+                .defaultValue(Boolean.TRUE.toString()));
+    }
+
+    @Override
+    public void processOpts() {
+        super.processOpts();
+
+        // default HIDE_GENERATION_TIMESTAMP to true
+        if (!additionalProperties.containsKey(CodegenConstants.HIDE_GENERATION_TIMESTAMP)) {
+            additionalProperties.put(CodegenConstants.HIDE_GENERATION_TIMESTAMP, Boolean.TRUE.toString());
+        }
     }
 
     @Override
@@ -89,7 +102,10 @@ public class JavascriptClosureAngularClientCodegen extends DefaultCodegen implem
     }
 
     @Override
-    public String escapeReservedWord(String name) {
+    public String escapeReservedWord(String name) {           
+        if(this.reservedWordsMappings().containsKey(name)) {
+            return this.reservedWordsMappings().get(name);
+        }
         return "_" + name;
     }
 

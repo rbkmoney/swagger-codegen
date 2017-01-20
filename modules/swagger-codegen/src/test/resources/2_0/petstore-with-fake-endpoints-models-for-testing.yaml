@@ -1,16 +1,16 @@
 swagger: '2.0'
 info:
   description: "This spec is mainly for testing Petstore server and contains fake endpoints, models. Please do not use this for any other purpose. Special characters: \" \\"
-  version: 1.0.0 
-  title: Swagger Petstore 
+  version: 1.0.0
+  title: Swagger Petstore
   termsOfService: 'http://swagger.io/terms/'
   contact:
-    email: apiteam@swagger.io 
+    email: apiteam@swagger.io
   license:
-    name: Apache 2.0 
+    name: Apache 2.0
     url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
-host: petstore.swagger.io 
-basePath: /v2 
+host: petstore.swagger.io
+basePath: /v2
 tags:
   - name: pet
     description: Everything about your Pets
@@ -367,7 +367,6 @@ paths:
           description: ID of the order that needs to be deleted
           required: true
           type: string
-          minimum: 1
       responses:
         '400':
           description: Invalid ID supplied
@@ -565,7 +564,7 @@ paths:
       tags:
         - fake
       summary: To test "client" model
-      descriptions: To test "client" model
+      description: To test "client" model
       operationId: testClientModel
       consumes:
         - application/json
@@ -586,14 +585,62 @@ paths:
     get:
       tags:
         - fake
-      summary: To test enum query parameters
-      descriptions: To test enum query parameters
-      operationId: testEnumQueryParameters
+      summary: To test enum parameters
+      description: To test enum parameters
+      operationId: testEnumParameters
       consumes:
-        - application/json
+        - "*/*"
       produces:
-        - application/json
+        - "*/*"
       parameters:
+        - name: enum_form_string_array
+          type: array
+          items:
+            type: string
+            default: '$'
+            enum:
+              - '>'
+              - '$'
+          in: formData
+          description: Form parameter enum test (string array)
+        - name: enum_form_string
+          type: string
+          default: '-efg'
+          enum:
+            - _abc
+            - '-efg'
+            - (xyz)
+          in: formData
+          description: Form parameter enum test (string)
+        - name: enum_header_string_array
+          type: array
+          items:
+            type: string
+            default: '$'
+            enum:
+              - '>'
+              - '$'
+          in: header
+          description: Header parameter enum test (string array)
+        - name: enum_header_string
+          type: string
+          default: '-efg'
+          enum:
+            - _abc
+            - '-efg'
+            - (xyz)
+          in: header
+          description: Header parameter enum test (string)
+        - name: enum_query_string_array
+          type: array
+          items:
+            type: string
+            default: '$'
+            enum:
+              - '>'
+              - '$'
+          in: query
+          description: Query parameter enum test (string array)
         - name: enum_query_string
           type: string
           default: '-efg'
@@ -601,11 +648,11 @@ paths:
             - _abc
             - '-efg'
             - (xyz)
-          in: formData 
+          in: query
           description: Query parameter enum test (string)
         - name: enum_query_integer
-          type: number
-          format: int32 
+          type: integer
+          format: int32
           enum:
             - 1
             - -2
@@ -613,7 +660,7 @@ paths:
           description: Query parameter enum test (double)
         - name: enum_query_double
           type: number
-          format: double 
+          format: double
           enum:
             - 1.1
             - -1.2
@@ -626,7 +673,7 @@ paths:
           description: Not found
     post:
       tags:
-        - fake 
+        - fake
       summary: |
         Fake endpoint for testing various parameters
         假端點
@@ -689,6 +736,11 @@ paths:
           pattern: /[a-z]/i
           in: formData
           description: None
+        - name: pattern_without_delimiter
+          type: string
+          pattern: "^[A-Z].*"
+          in: formData
+          description: None
           required: true
         - name: byte
           type: string
@@ -718,12 +770,17 @@ paths:
           minLength: 10
           in: formData
           description: None
+        - name: callback
+          type: string
+          in: formData
+          description: None
       responses:
         '400':
           description: Invalid username supplied
         '404':
           description: User not found
-
+      security:
+        - http_basic_test: []
 securityDefinitions:
   petstore_auth:
     type: oauth2
@@ -736,6 +793,8 @@ securityDefinitions:
     type: apiKey
     name: api_key
     in: header
+  http_basic_test:
+    type: basic
 definitions:
   Order:
     type: object
@@ -898,9 +957,14 @@ definitions:
         type: integer
         format: int32
       class:
-        type: string 
+        type: string
     xml:
       name: Name
+  ClassModel:
+    description: Model for testing model with "_class" property
+    properties:
+      _class:
+        type: string
   Dog:
     allOf:
       - $ref: '#/definitions/Animal'
@@ -981,7 +1045,7 @@ definitions:
         format: date-time
       uuid:
         type: string
-        format: uuid 
+        format: uuid
       password:
         type: string
         format: password
@@ -1002,6 +1066,7 @@ definitions:
         enum:
           - UPPER
           - lower
+          - ''
       enum_integer:
         type: integer
         format: int32
@@ -1014,6 +1079,8 @@ definitions:
         enum:
           - 1.1
           - -1.2
+      outerEnum:
+        $ref: '#/definitions/OuterEnum'
   AdditionalPropertiesClass:
     type: object
     properties:
@@ -1036,10 +1103,15 @@ definitions:
       dateTime:
         type: string
         format: date-time
-      map: 
+      map:
         type: object
         additionalProperties:
           $ref: '#/definitions/Animal'
+  List:
+    type: object
+    properties:
+      123-list:
+        type: string
   Client:
     type: object
     properties:
@@ -1062,6 +1134,23 @@ definitions:
       foo:
         type: string
         readOnly: true
+  Capitalization:
+      type: object
+      properties:
+        smallCamel:
+          type: string
+        CapitalCamel:
+          type: string
+        small_Snake:
+          type: string
+        Capital_Snake:
+          type: string
+        SCA_ETH_Flow_Points:
+          type: string
+        ATT_NAME:
+          description: >
+            Name of the pet
+          type: string
   MapTest:
     type: object
     properties:
@@ -1070,14 +1159,14 @@ definitions:
         additionalProperties:
           type: object
           additionalProperties:
-            type: string  
+            type: string
       # comment out the following (map of map of enum) as many language not yet support this
       #map_map_of_enum:
       #  type: object
       #  additionalProperties:
       #    type: object
       #    additionalProperties:
-      #      type: string  
+      #      type: string
       #      enum:
       #        - UPPER
       #        - lower
@@ -1138,6 +1227,37 @@ definitions:
           type: array
           items:
             type: number
+  EnumArrays:
+    type: object
+    properties:
+      just_symbol:
+        type: string
+        enum:
+          - ">="
+          - "$"
+      array_enum:
+        type: array
+        items:
+          type: string
+          enum:
+            - fish
+            - crab
+      # comment out the following as 2d array of enum is not supported at the moment
+      #array_array_enum:
+      #  type: array
+      #  items:
+      #    type: array
+      #    items:
+      #      type: string
+      #      enum:
+      #        - Cat
+      #        - Dog
+  OuterEnum:
+    type: "string"
+    enum:
+    - "placed"
+    - "approved"
+    - "delivered"
 externalDocs:
   description: Find out more about Swagger
   url: 'http://swagger.io'

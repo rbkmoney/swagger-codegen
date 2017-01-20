@@ -11,6 +11,14 @@
     <maven>2.2.0</maven>
   </prerequisites>
 
+  <licenses>
+    <license>
+      <name>{{licenseName}}</name>
+      <url>{{licenseUrl}}</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+
   <build>
     <plugins>
       <plugin>
@@ -107,6 +115,11 @@
           {{/java8}}
         </configuration>
       </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-javadoc-plugin</artifactId>
+        <version>2.10.4</version>
+      </plugin>
     </plugins>
   </build>
   <dependencies>
@@ -176,6 +189,28 @@
       <version>2.2</version>
     </dependency>
 
+    {{#supportJava6}}
+    <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-lang3</artifactId>
+      <version>${commons_lang3_version}</version>
+    </dependency>
+
+    <dependency>
+      <groupId>commons-io</groupId>
+      <artifactId>commons-io</artifactId>
+      <version>${commons_io_version}</version>
+    </dependency>
+    {{/supportJava6}}
+{{#useBeanValidation}}
+    <!-- Bean Validation API support -->
+    <dependency>
+        <groupId>javax.validation</groupId>
+        <artifactId>validation-api</artifactId>
+        <version>1.1.0.Final</version>
+        <scope>provided</scope>
+    </dependency>
+{{/useBeanValidation}}
     <!-- test dependencies -->
     <dependency>
       <groupId>junit</groupId>
@@ -192,6 +227,10 @@
     {{^java8}}
     <jodatime-version>2.9.4</jodatime-version>
     {{/java8}}
+    {{#supportJava6}}
+    <commons_io_version>2.5</commons_io_version>
+    <commons_lang3_version>3.5</commons_lang3_version>
+    {{/supportJava6}}
     <maven-plugin-version>1.0.0</maven-plugin-version>
     <junit-version>4.12</junit-version>
   </properties>

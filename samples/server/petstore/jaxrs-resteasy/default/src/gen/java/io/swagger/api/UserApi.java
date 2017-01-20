@@ -4,8 +4,8 @@ import io.swagger.model.*;
 import io.swagger.api.UserApiService;
 import io.swagger.api.factories.UserApiServiceFactory;
 
-import io.swagger.model.User;
 import java.util.List;
+import io.swagger.model.User;
 
 import java.util.List;
 import io.swagger.api.NotFoundException;
@@ -16,11 +16,12 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.SecurityContext;
 import javax.ws.rs.*;
+import javax.validation.constraints.*;
 
 @Path("/user")
 
 
-@javax.annotation.Generated(value = "class io.swagger.codegen.languages.JavaResteasyServerCodegen", date = "2016-07-01T21:32:05.980+08:00")
+
 public class UserApi  {
    private final UserApiService delegate = UserApiServiceFactory.getUserApi();
 
@@ -68,7 +69,7 @@ public class UserApi  {
     @Path("/login")
     
     @Produces({ "application/xml", "application/json" })
-    public Response loginUser( @QueryParam("username") String username, @QueryParam("password") String password,@Context SecurityContext securityContext)
+    public Response loginUser( @NotNull  @QueryParam("username") String username, @NotNull  @QueryParam("password") String password,@Context SecurityContext securityContext)
     throws NotFoundException {
         return delegate.loginUser(username,password,securityContext);
     }
