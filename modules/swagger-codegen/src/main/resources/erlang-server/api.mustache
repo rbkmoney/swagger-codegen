@@ -44,10 +44,8 @@ request_params(_) ->
     {type, 'date'} |
     {type, 'datetime'} |
     {enum, [atom()]} |
-    {max, Max :: number()} |
-    {exclusive_max, Max :: number()} |
-    {min, Min :: number()} |
-    {exclusive_min, Min :: number()} |
+    {max, Max :: number(), Type :: exclusive | inclusive} |
+    {min, Min :: number(), Type :: exclusive | inclusive} |
     {max_length, MaxLength :: integer()} |
     {min_length, MaxLength :: integer()} |
     {pattern, Pattern :: string()} |
@@ -199,26 +197,30 @@ validate(Rule = {enum, Values}, Name, Value, _ValidatorState) ->
             validation_error(Rule, Name)
     end;
 
-validate(Rule = {max, Max}, Name, Value, _ValidatorState) ->
-    case Value >= Max of
+validate(Rule = {max, Max, Type}, Name, Value, _ValidatorState) ->
+    Result = case Value of
+        _ when Value < Max andalso Type =:= exclusive ->
+            true;
+        _ when Value =< Max andalso Type =:= inclusive  ->
+            true;
+        _ ->
+            false
+    end,
+    case Result of
         true -> ok;
         false -> validation_error(Rule, Name)
     end;
 
-validate(Rule = {exclusive_max, ExclusiveMax}, Name, Value, _ValidatorState) ->
-    case Value > ExclusiveMax of
-        true -> ok;
-        false -> validation_error(Rule, Name)
-    end;
-
-validate(Rule = {min, Min}, Name, Value, _ValidatorState) ->
-    case Value =< Min of
-        true -> ok;
-        false -> validation_error(Rule, Name)
-    end;
-
-validate(Rule = {exclusive_min, ExclusiveMin}, Name, Value, _ValidatorState) ->
-    case Value =< ExclusiveMin of
+validate(Rule = {min, Min, Type}, Name, Value, _ValidatorState) ->
+    Result = case Value of
+        _ when Value > Min andalso Type =:= exclusive ->
+            true;
+        _ when Value >= Min andalso Type =:= inclusive ->
+            true;
+        _ ->
+            false
+    end,
+    case Result of
         true -> ok;
         false -> validation_error(Rule, Name)
     end;
