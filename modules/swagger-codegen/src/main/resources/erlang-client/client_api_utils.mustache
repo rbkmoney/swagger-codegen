@@ -183,7 +183,14 @@ get_url(Host, Port, Path) ->
 
 -spec fill_url(Url::string(), Params::map(), Qs::map()) -> url().
 fill_url(Url, Params, Qs) ->
-    Fun = fun(K, V, AccIn) -> re:replace(AccIn, ":" ++ K, V, [{return, list}]) end,
+    Fun = fun(K, V, AccIn) ->
+        re:replace(
+            AccIn,
+            <<":", (to_binary(K))/binary>>,
+            to_binary(V),
+            [{return, list}]
+        )
+    end,
     case maps:size(Qs) > 0 of
         % true ->
         true ->
