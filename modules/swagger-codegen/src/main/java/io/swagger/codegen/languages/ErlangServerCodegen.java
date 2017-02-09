@@ -125,6 +125,7 @@ public class ErlangServerCodegen extends DefaultCodegen implements CodegenConfig
         supportingFiles.add(new SupportingFile("swagger.mustache", "", toPrivFilePath("swagger", "json")));
         supportingFiles.add(new SupportingFile("default_logic_handler.mustache", "",  toSourceFilePath("default_logic_handler", "erl")));
         supportingFiles.add(new SupportingFile("logic_handler.mustache", "",  toSourceFilePath("logic_handler", "erl")));
+        supportingFiles.add(new SupportingFile("validator.mustache", "",  toSourceFilePath("validator", "erl")));
         writeOptional(outputFolder, new SupportingFile("README.mustache", "", "README.md"));
     }
 
@@ -182,7 +183,7 @@ public class ErlangServerCodegen extends DefaultCodegen implements CodegenConfig
      * @return the escaped term
      */
     @Override
-    public String escapeReservedWord(String name) {           
+    public String escapeReservedWord(String name) {
         if(this.reservedWordsMappings().containsKey(name)) {
             return this.reservedWordsMappings().get(name);
         }

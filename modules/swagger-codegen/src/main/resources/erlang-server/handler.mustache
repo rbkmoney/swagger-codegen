@@ -22,7 +22,7 @@
 -record(state, {
     operation_id :: {{packageName}}_api:operation_id(),
     logic_handler :: atom(),
-    validator_state :: jesse_state:state(),
+    validator :: {{packageName}}_validator:validator(),
     context :: {{packageName}}_api:request_context()
 }).
 
@@ -38,7 +38,7 @@ init(_Transport, Req, Opts) ->
 -spec rest_init(Req :: cowboy_req:req(), Opts :: {{packageName}}_router:init_opts()) ->
     {ok, Req :: cowboy_req:req(), State :: state()}.
 
-rest_init(Req0, {Operations, LogicHandler, ValidatorState}) ->
+rest_init(Req0, {ID, Operations, LogicHandler}) ->
     {Method, Req1} = cowboy_req:method(Req0),
     OperationID = maps:get(Method, Operations, undefined),
 
@@ -47,7 +47,7 @@ rest_init(Req0, {Operations, LogicHandler, ValidatorState}) ->
     State = #state{
         operation_id = OperationID,
         logic_handler = LogicHandler,
-        validator_state = ValidatorState,
+        validator = {{packageName}}_validator:get_validator(ID),
         context = #{}
     },
 
@@ -255,11 +255,11 @@ handle_request_json(
     State = #state{
         operation_id = OperationID,
         logic_handler = LogicHandler,
-        validator_state = ValidatorState,
+        validator = Validator,
         context = Context
     }
 ) ->
-    case {{packageName}}_api:populate_request(OperationID, Req0, ValidatorState) of
+    case {{packageName}}_api:populate_request(OperationID, Req0, Validator) of
         {ok, Populated, Req1} ->
             {Code, Headers, Body} = {{packageName}}_logic_handler:handle_request(
                 LogicHandler,
@@ -271,7 +271,7 @@ handle_request_json(
                 OperationID,
                 Code,
                 Body,
-                ValidatorState
+                Validator
             ),
             PreparedBody = jsx:encode(Body),
             Response = {ok, {Code, Headers, PreparedBody}},
@@ -280,4 +280,5 @@ handle_request_json(
             process_response({error, Reason}, Req1, State)
     end.
 
-validate_headers(_, Req) -> {true, Req}.
+validate_headers(_, Req) ->
+    {true, Req}.
