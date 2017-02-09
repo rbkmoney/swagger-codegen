@@ -1,9 +1,10 @@
 -module({{packageName}}_validator).
 
--export([child_spec/1]).
--export([start_link/1]).
--export([validate/3]).
+-export([child_spec/2]).
 -export([get_validator/1]).
+
+-export([start_link/0]).
+-export([validate/3]).
 
 -export([init/1]).
 -export([handle_call/3]).
@@ -14,47 +15,87 @@
 
 -export_type([defname/0]).
 -export_type([validator/0]).
+-export_type([pool_options/0]).
 
 -type json() :: jsx:json_term().
 -type defname() :: binary().
--type validator() ::
-    fun((json(), defname()) -> ok | {error, [term()]}).
+-type validator() :: fun((json(), defname()) -> ok | {error, [term()]}).
 
--spec child_spec(ID :: atom()) ->
+-type pool_time_interval() :: {non_neg_integer(), min | sec | ms}.
+-type pool_options() :: #{
+    name                 => term(),
+    start_mfa            => {atom(), atom(), list()},
+    max_count            => non_neg_integer(),
+    init_count           => non_neg_integer(),
+    cull_interval        => pool_time_interval(),
+    max_age              => pool_time_interval(),
+    member_start_timeout => pool_time_interval()
+}.
+
+-define(DEFAULT_POOL_OPTIONS, #{
+    init_count => 1,
+    max_count  => 20
+}).
+
+-spec child_spec(ID :: atom(), PoolOptions :: pool_options()) ->
     supervisor:child_spec().
 
-child_spec(ID) ->
-    #{
-        id => {?MODULE, ID},
-        start => {?MODULE, start_link, [ID]},
-        restart => permanent
-    }.
-
--spec start_link(ID :: atom()) ->
-    {ok, pid()}.
-
-start_link(ID) ->
-    gen_server:start_link({local, construct_server_ref(ID)}, ?MODULE, [], []).
+child_spec(ID, PoolOptions) ->
+    pooler:pool_child_spec(maps:to_list(
+        maps:merge(
+            maps:merge(?DEFAULT_POOL_OPTIONS, PoolOptions),
+            #{
+                name      => construct_pool_name(ID),
+                start_mfa => {?MODULE, start_link, []}
+            }
+        )
+    )).
 
 -spec validate(ID :: atom(), json(), defname()) ->
     ok | {error, [term()]}.
 
 validate(ID, Json, Defname) ->
-    do_validate(construct_server_ref(ID), Json, Defname).
+    validate_(construct_pool_name(ID), Json, Defname).
+
+validate_(PoolName, Json, Defname) ->
+    Pid =
+        case pooler:take_member(PoolName) of
+            Member when is_pid(Member) ->
+                Member;
+            error_no_members ->
+                % TODO looks dangerous
+                validate_(PoolName, Json, Defname)
+        end,
+    try
+        Result = do_validate(Pid, Json, Defname),
+        ok = pooler:return_member(PoolName, Pid, ok),
+        Result
+    catch Class:Reason ->
+        ok = pooler:return_member(PoolName, Pid, fail),
+        erlang:raise(Class, Reason, erlang:get_stacktrace())
+    end.
 
 -spec get_validator(ID :: atom()) ->
     validator().
 
 get_validator(ID) ->
     fun (Json, Defname) ->
-        do_validate(construct_server_ref(ID), Json, Defname)
+        validate_(construct_pool_name(ID), Json, Defname)
     end.
 
-do_validate(ServerRef, Json, Defname) ->
-    gen_server:call(ServerRef, {validate, Json, Defname}).
+-spec start_link() ->
+    {ok, pid()}.
 
-construct_server_ref(ID) ->
+start_link() ->
+    gen_server:start_link(?MODULE, [], []).
+
+%%
+
+construct_pool_name(ID) ->
     binary_to_atom(<<?MODULE_STRING, $_, (atom_to_binary(ID, utf8))/binary>>, utf8).
+
+do_validate(Pid, Json, Defname) ->
+    gen_server:call(Pid, {validate, Json, Defname}).
 
 %%
 

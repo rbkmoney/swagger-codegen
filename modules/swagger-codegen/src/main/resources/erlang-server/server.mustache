@@ -10,9 +10,10 @@
 
 -type id() :: atom().
 -type params() :: #{
-    ip            => inet:ip_address(),
-    port          => inet:port_number(),
-    net_opts      => []
+    ip                  => inet:ip_address(),
+    port                => inet:port_number(),
+    net_opts            => [],
+    validator_pool_opts => swagger_validator:pool_options()
 }.
 
 -spec child_spec(id(), params()) -> supervisor:child_spec().
@@ -38,8 +39,8 @@ init({ID, Params}) ->
         ]
     }}.
 
-child_spec(validator, ID, _Params) ->
-    {{packageName}}_validator:child_spec(ID);
+child_spec(validator, ID, Params) ->
+    {{packageName}}_validator:child_spec(ID, maps:get(validator_pool_opts, Params, #{}));
 
 child_spec(server, ID, #{
     ip            := IP ,
