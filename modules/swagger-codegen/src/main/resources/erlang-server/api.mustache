@@ -73,30 +73,30 @@ request_param_info(OperationID, Name) ->
 -spec populate_request(
     OperationID :: operation_id(),
     Req :: cowboy_req:req(),
-    ValidatorState :: jesse_state:state()
+    Validator :: {{packageName}}_validator:validator()
 ) ->
     {ok, Model :: #{}, Req :: cowboy_req:req()} |
     {error, Reason :: any(), Req :: cowboy_req:req()}.
 
-populate_request(OperationID, Req, ValidatorState) ->
+populate_request(OperationID, Req, Validator) ->
     Params = request_params(OperationID),
-    populate_request_params(OperationID, Params, Req, ValidatorState, #{}).
+    populate_request_params(OperationID, Params, Req, Validator, #{}).
 
 populate_request_params(_, [], Req, _, Model) ->
     {ok, Model, Req};
 
-populate_request_params(OperationID, [FieldParams | T], Req0, ValidatorState, Model) ->
-    case populate_request_param(OperationID, FieldParams, Req0, ValidatorState) of
+populate_request_params(OperationID, [FieldParams | T], Req0, Validator, Model) ->
+    case populate_request_param(OperationID, FieldParams, Req0, Validator) of
         {ok, K, V, Req} ->
-            populate_request_params(OperationID, T, Req, ValidatorState, maps:put(K, V, Model));
+            populate_request_params(OperationID, T, Req, Validator, maps:put(K, V, Model));
         Error ->
             Error
     end.
 
-populate_request_param(OperationID, Name, Req0, ValidatorState) ->
+populate_request_param(OperationID, Name, Req0, Validator) ->
     #{rules := Rules, source := Source} = request_param_info(OperationID, Name),
     {Value, Req} = get_value(Source, Name, Req0),
-    case prepare_param(Rules, Name, Value, ValidatorState) of
+    case prepare_param(Rules, Name, Value, Validator) of
         {ok, Result} -> {ok, Name, Result, Req};
         {error, Reason} ->
             {error, Reason, Req}
@@ -106,39 +106,39 @@ populate_request_param(OperationID, Name, Req0, ValidatorState) ->
     OperationID :: operation_id(),
     Code :: 200..599,
     Body :: jesse:json_term(),
-    ValidatorState :: jesse_state:state()
+    Validator :: {{packageName}}_validator:validator()
 ) -> ok | no_return().
 {{#apiInfo}}{{#apis}}
 {{#operations}}{{#operation}}
 {{#responses}}
-validate_response('{{operationId}}', {{code}}, Body, ValidatorState) ->
-    validate_response_body('{{dataType}}', '{{baseType}}', Body, ValidatorState);
+validate_response('{{operationId}}', {{code}}, Body, Validator) ->
+    validate_response_body('{{dataType}}', '{{baseType}}', Body, Validator);
 {{/responses}}
 {{/operation}}{{/operations}}{{/apis}}{{/apiInfo}}
 
-validate_response(_OperationID, _Code, _Body, _ValidatorState) ->
+validate_response(_OperationID, _Code, _Body, _Validator) ->
     ok.
 
-validate_response_body('list', ReturnBaseType, Body, ValidatorState) ->
+validate_response_body('list', ReturnBaseType, Body, Validator) ->
     [
-        validate(schema, ReturnBaseType, Item, ValidatorState)
+        validate(schema, ReturnBaseType, Item, Validator)
     || Item <- Body];
 
-validate_response_body(_, ReturnBaseType, Body, ValidatorState) ->
-    validate(schema, ReturnBaseType, Body, ValidatorState).
+validate_response_body(_, ReturnBaseType, Body, Validator) ->
+    validate(schema, ReturnBaseType, Body, Validator).
 
 %%%
 
-validate(Rule = {required, Req}, Name, Value, _ValidatorState) ->
+validate(Rule = {required, Req}, Name, Value, _Validator) ->
     case Value of
         undefined when Req -> validation_error(Rule, Name);
         _ -> ok
     end;
 
-validate(_, _Name, undefined, _ValidatorState) ->
+validate(_, _Name, undefined, _Validator) ->
     ok;
 
-validate(Rule = {type, 'integer'}, Name, Value, _ValidatorState) ->
+validate(Rule = {type, 'integer'}, Name, Value, _Validator) ->
     try
         {ok, {{packageName}}_utils:to_int(Value)}
     catch
@@ -146,7 +146,7 @@ validate(Rule = {type, 'integer'}, Name, Value, _ValidatorState) ->
             validation_error(Rule, Name)
     end;
 
-validate(Rule = {type, 'float'}, Name, Value, _ValidatorState) ->
+validate(Rule = {type, 'float'}, Name, Value, _Validator) ->
     try
         {ok, {{packageName}}_utils:to_float(Value)}
     catch
@@ -154,16 +154,16 @@ validate(Rule = {type, 'float'}, Name, Value, _ValidatorState) ->
             validation_error(Rule, Name)
     end;
 
-validate(Rule = {type, 'binary'}, Name, Value, _ValidatorState) ->
+validate(Rule = {type, 'binary'}, Name, Value, _Validator) ->
     case is_binary(Value) of
         true -> ok;
         false -> validation_error(Rule, Name)
     end;
 
-validate(_Rule = {type, 'boolean'}, _Name, Value, _ValidatorState) when is_boolean(Value) ->
+validate(_Rule = {type, 'boolean'}, _Name, Value, _Validator) when is_boolean(Value) ->
     {ok, Value};
 
-validate(Rule = {type, 'boolean'}, Name, Value, _ValidatorState) ->
+validate(Rule = {type, 'boolean'}, Name, Value, _Validator) ->
     V = binary_to_lower(Value),
     try
         case binary_to_existing_atom(V, utf8) of
@@ -175,19 +175,19 @@ validate(Rule = {type, 'boolean'}, Name, Value, _ValidatorState) ->
             validation_error(Rule, Name)
     end;
 
-validate(Rule = {type, 'date'}, Name, Value, _ValidatorState) ->
+validate(Rule = {type, 'date'}, Name, Value, _Validator) ->
     case is_binary(Value) of
         true -> ok;
         false -> validation_error(Rule, Name)
     end;
 
-validate(Rule = {type, 'datetime'}, Name, Value, _ValidatorState) ->
+validate(Rule = {type, 'datetime'}, Name, Value, _Validator) ->
     case is_binary(Value) of
         true -> ok;
         false -> validation_error(Rule, Name)
     end;
 
-validate(Rule = {enum, Values}, Name, Value, _ValidatorState) ->
+validate(Rule = {enum, Values}, Name, Value, _Validator) ->
     try
         FormattedValue = erlang:binary_to_existing_atom(Value, utf8),
         case lists:member(FormattedValue, Values) of
@@ -199,7 +199,7 @@ validate(Rule = {enum, Values}, Name, Value, _ValidatorState) ->
             validation_error(Rule, Name)
     end;
 
-validate(Rule = {max, Max, Type}, Name, Value, _ValidatorState) ->
+validate(Rule = {max, Max, Type}, Name, Value, _Validator) ->
     Result = case Value of
         _ when Value < Max andalso Type =:= exclusive ->
             true;
@@ -213,7 +213,7 @@ validate(Rule = {max, Max, Type}, Name, Value, _ValidatorState) ->
         false -> validation_error(Rule, Name)
     end;
 
-validate(Rule = {min, Min, Type}, Name, Value, _ValidatorState) ->
+validate(Rule = {min, Min, Type}, Name, Value, _Validator) ->
     Result = case Value of
         _ when Value > Min andalso Type =:= exclusive ->
             true;
@@ -227,57 +227,58 @@ validate(Rule = {min, Min, Type}, Name, Value, _ValidatorState) ->
         false -> validation_error(Rule, Name)
     end;
 
-validate(Rule = {max_length, MaxLength}, Name, Value, _ValidatorState) ->
+validate(Rule = {max_length, MaxLength}, Name, Value, _Validator) ->
     case size(Value) =< MaxLength of
         true -> ok;
         false -> validation_error(Rule, Name)
     end;
 
-validate(Rule = {min_length, MinLength}, Name, Value, _ValidatorState) ->
+validate(Rule = {min_length, MinLength}, Name, Value, _Validator) ->
     case size(Value) >= MinLength of
         true -> ok;
         false -> validation_error(Rule, Name)
     end;
 
-validate(Rule = {pattern, Pattern}, Name, Value, _ValidatorState) ->
+validate(Rule = {pattern, Pattern}, Name, Value, _Validator) ->
     {ok, MP} = re:compile(Pattern),
     case re:run(Value, MP) of
         {match, _} -> ok;
         _ -> validation_error(Rule, Name)
     end;
 
-validate(Rule = {list, Format, Ruleset}, Name, Value, ValidatorState) ->
+validate(Rule = {list, Format, Ruleset}, Name, Value, Validator) ->
     try
         Values = parse_collection_value(Format, Value),
-        {ok, [validate_param(Ruleset, Name, V, ValidatorState) || V <- Values]}
+        {ok, [validate_param(Ruleset, Name, V, Validator) || V <- Values]}
     catch
         error:badarg ->
             validation_error(Rule, Name)
     end;
 
-validate(Rule = schema, Name, Value, ValidatorState) ->
-    Definition =  list_to_binary("#/definitions/" ++ {{packageName}}_utils:to_list(Name)),
-    try
-        _ = validate_with_schema(Value, Definition, ValidatorState),
-        ok
-    catch
-        throw:[{schema_invalid, _, Error} | _] ->
+validate(Rule = schema, Name, Value, Validator) ->
+    Defname = list_to_binary("#/definitions/" ++ {{packageName}}_utils:to_list(Name)),
+    case Validator(Value, Defname) of
+        ok ->
+            ok;
+        {error, [{schema_invalid, _, Error} | _]} ->
             Info = #{
                 type => schema_invalid,
                 error => Error
             },
             validation_error(Rule, Name, Info);
-        throw:[{data_invalid, Schema, Error, _, Path} | _] ->
+        {error, [{data_invalid, Schema, Error, _, Path} | _]} ->
             Info = #{
                 type => data_invalid,
                 error => Error,
                 schema => Schema,
                 path => Path
             },
-            validation_error(Rule, Name, Info)
+            validation_error(Rule, Name, Info);
+        {error, Reason} ->
+            throw(Reason)
     end;
 
-validate(Rule, Name, _Value, _ValidatorState) ->
+validate(Rule, Name, _Value, _Validator) ->
     error_logger:info_msg("Can't validate ~p with ~p", [Name, Rule]),
     error({unknown_validation_rule, Rule}).
 
@@ -333,17 +334,10 @@ prepare_body(Body) ->
         _ -> jsx:decode(Body, [return_maps])
     end.
 
-validate_with_schema(Body, Definition, ValidatorState) ->
-    jesse_schema_validator:validate_with_state(
-        [{<<"$ref">>, Definition}],
-        Body,
-        ValidatorState
-    ).
-
-validate_param(Rules, Name, Value, ValidatorState) ->
+validate_param(Rules, Name, Value, Validator) ->
     lists:foldl(
         fun(Rule, Acc) ->
-            case validate(Rule, Name, Acc, ValidatorState) of
+            case validate(Rule, Name, Acc, Validator) of
                 ok -> Acc;
                 {ok, Prepared} -> Prepared
             end
@@ -352,9 +346,9 @@ validate_param(Rules, Name, Value, ValidatorState) ->
         Rules
     ).
 
-prepare_param(Rules, Name, Value, ValidatorState) ->
+prepare_param(Rules, Name, Value, Validator) ->
     try
-        {ok, validate_param(Rules, Name, Value, ValidatorState)}
+        {ok, validate_param(Rules, Name, Value, Validator)}
     catch
         throw:Reason ->
             {error, Reason}

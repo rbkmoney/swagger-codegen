@@ -1,0 +1,166 @@
+-module({{packageName}}_validator).
+
+-export([child_spec/2]).
+-export([get_validator/1]).
+
+-export([start_link/0]).
+-export([validate/3]).
+
+-export([init/1]).
+-export([handle_call/3]).
+-export([handle_cast/2]).
+-export([handle_info/2]).
+-export([code_change/3]).
+-export([terminate/2]).
+
+-export_type([defname/0]).
+-export_type([validator/0]).
+-export_type([pool_options/0]).
+
+-type json() :: jsx:json_term().
+-type defname() :: binary().
+-type validate_error() :: [term()].
+-type validator() :: fun((json(), defname()) -> ok | {error, validate_error() | unavailable}).
+
+-type pool_time_interval() :: {non_neg_integer(), min | sec | ms}.
+-type pool_options() :: #{
+    name                 => term(),
+    start_mfa            => {atom(), atom(), list()},
+    max_count            => non_neg_integer(),
+    init_count           => non_neg_integer(),
+    cull_interval        => pool_time_interval(),
+    max_age              => pool_time_interval(),
+    member_start_timeout => pool_time_interval()
+}.
+
+-define(DEFAULT_POOL_OPTIONS, #{
+    init_count => 1,
+    max_count  => 20
+}).
+
+-define(DEFAULT_TAKE_TIMEOUT, 3000).
+
+-spec child_spec(ID :: atom(), PoolOptions :: pool_options()) ->
+    supervisor:child_spec().
+
+child_spec(ID, PoolOptions) ->
+    pooler:pool_child_spec(maps:to_list(
+        maps:merge(
+            maps:merge(?DEFAULT_POOL_OPTIONS, PoolOptions),
+            #{
+                name      => construct_pool_name(ID),
+                start_mfa => {?MODULE, start_link, []}
+            }
+        )
+    )).
+
+-spec validate(ID :: atom(), json(), defname()) ->
+    ok | {error, validate_error() | undefined}.
+
+validate(ID, Json, Defname) ->
+    validate_(construct_pool_name(ID), Json, Defname).
+
+validate_(PoolName, Json, Defname) ->
+    case pooler:take_member(PoolName, ?DEFAULT_TAKE_TIMEOUT) of
+        Pid when is_pid(Pid) ->
+            try
+                Result = do_validate(Pid, Json, Defname),
+                ok = pooler:return_member(PoolName, Pid, ok),
+                Result
+            catch Class:Reason ->
+                ok = pooler:return_member(PoolName, Pid, fail),
+                erlang:raise(Class, Reason, erlang:get_stacktrace())
+            end;
+        error_no_members ->
+            {error, unavailable}
+    end.
+
+-spec get_validator(ID :: atom()) ->
+    validator().
+
+get_validator(ID) ->
+    PoolName = construct_pool_name(ID),
+    fun (Json, Defname) ->
+        validate_(PoolName, Json, Defname)
+    end.
+
+-spec start_link() ->
+    {ok, pid()}.
+
+start_link() ->
+    gen_server:start_link(?MODULE, [], []).
+
+%%
+
+construct_pool_name(ID) ->
+    binary_to_atom(<<?MODULE_STRING, $_, (atom_to_binary(ID, utf8))/binary>>, utf8).
+
+do_validate(Pid, Json, Defname) ->
+    gen_server:call(Pid, {validate, Json, Defname}).
+
+%%
+
+-type state() ::
+    jesse_state:state().
+
+-spec init(_) ->
+    {ok, state()}.
+
+init(_) ->
+    Schema = get_swagger_schema(),
+    {ok, prepare_validator(Schema)}.
+
+-spec handle_call
+    ({validate, json(), defname()}, _From, state()) ->
+        {reply, ok | {error, [term()]}, state()};
+    (_, _From, state()) ->
+        {noreply, state()}.
+
+handle_call({validate, Json, Defname}, _From, State) ->
+    try
+        _ = jesse_schema_validator:validate_with_state(
+            [{<<"$ref">>, Defname}],
+            Json,
+            State
+        ),
+        {reply, ok, State}
+    catch
+        throw:Errors when is_list(Errors) ->
+            {reply, {error, Errors}, State}
+    end;
+
+handle_call(_Call, _From, State) ->
+    {noreply, State}.
+
+-spec handle_cast(_Cast, state()) ->
+    {noreply, state()}.
+
+handle_cast(_Cast, State) ->
+    {noreply, State}.
+
+-spec handle_info(_Info, state()) ->
+    {noreply, state()}.
+
+handle_info(_Info, State) ->
+    {noreply, State}.
+
+-spec code_change(_, state(), _) ->
+    {ok, state()}.
+code_change(_, State, _) ->
+    {ok, State}.
+
+-spec terminate(_Reason, state()) ->
+    ok.
+terminate(_, _) ->
+    ok.
+
+%%
+
+prepare_validator(Schema) ->
+    jesse_state:new(Schema, [{default_schema_ver, <<"http://json-schema.org/draft-04/schema#">>}]).
+
+get_swagger_schema() ->
+    {ok, AppName} = application:get_application(?MODULE),
+    Filepath = filename:join({{packageName}}_utils:priv_dir(AppName), "swagger.json"),
+    {ok, Contents} = file:read_file(Filepath),
+    jsx:decode(Contents).
