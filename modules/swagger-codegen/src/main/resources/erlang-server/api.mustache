@@ -271,7 +271,9 @@ validate(Rule = schema, Name, Value, Validator) ->
                 schema => Schema,
                 path => Path
             },
-            validation_error(Rule, Name, Info)
+            validation_error(Rule, Name, Info);
+        {error, Reason} ->
+            throw(Reason)
     end;
 
 validate(Rule, Name, _Value, _Validator) ->

@@ -19,7 +19,8 @@
 
 -type json() :: jsx:json_term().
 -type defname() :: binary().
--type validator() :: fun((json(), defname()) -> ok | {error, [term()]}).
+-type validate_error() :: [term()].
+-type validator() :: fun((json(), defname()) -> ok | {error, validate_error() | unavailable}).
 
 -type pool_time_interval() :: {non_neg_integer(), min | sec | ms}.
 -type pool_options() :: #{
@@ -37,6 +38,8 @@
     max_count  => 20
 }).
 
+-define(DEFAULT_TAKE_TIMEOUT, 3000).
+
 -spec child_spec(ID :: atom(), PoolOptions :: pool_options()) ->
     supervisor:child_spec().
 
@@ -52,35 +55,33 @@ child_spec(ID, PoolOptions) ->
     )).
 
 -spec validate(ID :: atom(), json(), defname()) ->
-    ok | {error, [term()]}.
+    ok | {error, validate_error() | undefined}.
 
 validate(ID, Json, Defname) ->
     validate_(construct_pool_name(ID), Json, Defname).
 
 validate_(PoolName, Json, Defname) ->
-    Pid =
-        case pooler:take_member(PoolName) of
-            Member when is_pid(Member) ->
-                Member;
-            error_no_members ->
-                % TODO looks dangerous
-                validate_(PoolName, Json, Defname)
-        end,
-    try
-        Result = do_validate(Pid, Json, Defname),
-        ok = pooler:return_member(PoolName, Pid, ok),
-        Result
-    catch Class:Reason ->
-        ok = pooler:return_member(PoolName, Pid, fail),
-        erlang:raise(Class, Reason, erlang:get_stacktrace())
+    case pooler:take_member(PoolName, ?DEFAULT_TAKE_TIMEOUT) of
+        Pid when is_pid(Pid) ->
+            try
+                Result = do_validate(Pid, Json, Defname),
+                ok = pooler:return_member(PoolName, Pid, ok),
+                Result
+            catch Class:Reason ->
+                ok = pooler:return_member(PoolName, Pid, fail),
+                erlang:raise(Class, Reason, erlang:get_stacktrace())
+            end;
+        error_no_members ->
+            {error, unavailable}
     end.
 
 -spec get_validator(ID :: atom()) ->
     validator().
 
 get_validator(ID) ->
+    PoolName = construct_pool_name(ID),
     fun (Json, Defname) ->
-        validate_(construct_pool_name(ID), Json, Defname)
+        validate_(PoolName, Json, Defname)
     end.
 
 -spec start_link() ->
