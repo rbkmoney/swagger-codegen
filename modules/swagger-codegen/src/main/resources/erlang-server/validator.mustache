@@ -38,7 +38,7 @@
     max_count  => 20
 }).
 
--define(DEFAULT_TAKE_TIMEOUT, 3000).
+-define(DEFAULT_TAKE_TIMEOUT, {3, sec}).
 
 -spec child_spec(ID :: atom(), PoolOptions :: pool_options()) ->
     supervisor:child_spec().
@@ -110,11 +110,8 @@ init(_) ->
     Schema = get_swagger_schema(),
     {ok, prepare_validator(Schema)}.
 
--spec handle_call
-    ({validate, json(), defname()}, _From, state()) ->
-        {reply, ok | {error, [term()]}, state()};
-    (_, _From, state()) ->
-        {noreply, state()}.
+-spec handle_call({validate, json(), defname()} | _, _From, state()) ->
+    {reply, ok | {error, [term()]}, state()} | {noreply, state()}.
 
 handle_call({validate, Json, Defname}, _From, State) ->
     try
