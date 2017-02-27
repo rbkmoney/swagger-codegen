@@ -11,9 +11,11 @@
 
 {{#authMethods}}
     {{#isApiKey}}
--spec authorize_api_key(OperationID :: {{packageName}}_api:operation_id(), ApiKey :: binary()) -> {true, #{}}.
+-spec authorize_api_key(OperationID :: {{packageName}}_api:operation_id(), ApiKey :: binary()) ->
+    {true, undefined}.
 
-authorize_api_key(_, _) -> {true, #{}}.
+authorize_api_key(_, _) ->
+    {true, undefined}.
     {{/isApiKey}}
 {{/authMethods}}
 
