@@ -253,7 +253,7 @@ process_response(Response, Req0, State = #state{operation_id = OperationID}) ->
                 "Unable to process request for ~p: ~p",
                 [OperationID, Message]
             ),
-            {ok, Req} = cowboy_req:reply(400, Req0),
+            {ok, Req} = cowboy_req:reply(400, [], Message, Req0),
             {halt, Req, State}
     end.
 

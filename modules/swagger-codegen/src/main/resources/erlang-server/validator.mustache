@@ -19,8 +19,8 @@
 
 -type json() :: jsx:json_term().
 -type defname() :: binary().
--type validate_error() :: [term()].
--type validator() :: fun((json(), defname()) -> ok | {error, validate_error() | unavailable}).
+-type validate_error() :: {{packageName}}_api:validation_error().
+-type validator() :: fun((json(), defname()) -> ok | {error, {{packageName}}_api:validation_error() | unavailable}).
 
 -type pool_time_interval() :: {non_neg_integer(), min | sec | ms}.
 -type pool_options() :: #{
@@ -55,7 +55,7 @@ child_spec(ID, PoolOptions) ->
     )).
 
 -spec validate(ID :: atom(), json(), defname()) ->
-    ok | {error, validate_error() | undefined}.
+    ok | {error, [validate_error()] | unavailable}.
 
 validate(ID, Json, Defname) ->
     validate_(construct_pool_name(ID), Json, Defname).
@@ -115,6 +115,7 @@ init(_) ->
 
 handle_call({validate, Json, Defname}, _From, State) ->
     try
+        %%% DEAL WITH NON ok response
         _ = jesse_schema_validator:validate_with_state(
             [{<<"$ref">>, Defname}],
             Json,
@@ -123,7 +124,8 @@ handle_call({validate, Json, Defname}, _From, State) ->
         {reply, ok, State}
     catch
         throw:Errors when is_list(Errors) ->
-            {reply, {error, Errors}, State}
+            ValidationErrors = [map_error(E) || E <- Errors],
+            {reply, {error, ValidationErrors}, State}
     end;
 
 handle_call(_Call, _From, State) ->
@@ -151,6 +153,78 @@ code_change(_, State, _) ->
 terminate(_, _) ->
     ok.
 
+map_error({
+    'data_invalid',
+    _Schema,
+    Error,
+    _Data,
+    Path0
+}) ->
+    Path = get_error_path(Path0),
+    {ErrorType, Description} = map_error_(Error),
+    #{
+        type => ErrorType,
+        description => <<Description/binary, Path/binary>>
+    }.
+
+map_error_(all_schemas_not_valid) ->
+    {schema_violated, <<"">>};
+
+map_error_(any_schemas_not_valid) ->
+    {schema_violated, <<"Schema rule \"Any\" violated.">>};
+
+map_error_({missing_dependency, Dependency0}) ->
+    Dependency = {{packageName}}_utils:to_binary(Dependency0),
+    {schema_violated, <<"Missing dependency \"", Dependency/binary, "\".">>};
+
+map_error_(missing_required_property) ->
+    {schema_violated, <<"Missing required property.">>};
+
+map_error_(no_extra_items_allowed) ->
+    {schema_violated, <<"Extra items not allowed.">>};
+
+map_error_(no_extra_properties_allowed) ->
+    {schema_violated, <<"Extra properties not allowed.">>};
+
+map_error_(no_match) ->
+    {no_match, <<"">>};
+
+map_error_(not_found) ->
+    {not_found, <<"">>};
+
+map_error_(not_in_range) ->
+    {not_in_range, <<"">>};
+
+map_error_(not_multiple_of) ->
+    {not_multiple_of,  <<"Schema rule \"MultipleOf\" violated.">>};
+
+map_error_(not_one_schema_valid) ->
+    {schema_violated, <<"Schema rule \"OneOf\" violated.">>};
+
+map_error_(not_schema_valid) ->
+    {schema_violated, <<"Schema rule \"Not\" violated.">>};
+
+map_error_(too_few_properties) ->
+    {schema_violated, <<"Too few properties.">>};
+
+map_error_(too_many_properties) ->
+    {schema_violated,  <<"Too many properties.">>};
+
+map_error_(wrong_length) ->
+    {wrong_length, <<"">>};
+
+map_error_(wrong_size) ->
+    {wrong_size, <<"">>};
+
+map_error_(wrong_type) ->
+    {wrong_type, <<"">>}.
+
+get_error_path([]) ->
+    <<"">>;
+
+get_error_path(Path) ->
+    PreparedPath = {{packageName}}_utils:join(".", Path),
+    <<"Path to item: ", PreparedPath/binary>>.
 %%
 
 prepare_validator(Schema) ->

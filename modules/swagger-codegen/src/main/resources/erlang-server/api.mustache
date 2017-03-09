@@ -19,9 +19,43 @@
     port_number => Port :: inet:port_number()
 }.
 
+-type rule() ::
+    {type, 'binary'} |
+    {type, 'integer'} |
+    {type, 'float'} |
+    {type, 'boolean'} |
+    {type, 'date'} |
+    {type, 'datetime'} |
+    {enum, [atom()]} |
+    {max, Max :: number(), Type :: exclusive | inclusive} |
+    {min, Min :: number(), Type :: exclusive | inclusive} |
+    {max_length, MaxLength :: integer()} |
+    {min_length, MaxLength :: integer()} |
+    {pattern, Pattern :: string()} |
+    schema |
+    {required, boolean()}.
+
+-type validation_error() :: #{
+    type := error_type(),
+    description => binary()
+}.
+
+-type error_type() ::
+    no_match |
+    not_found |
+    not_in_range |
+    not_multiple_of |
+    wrong_length |
+    wrong_size |
+    schema_violated |
+    wrong_type.
+
+
 -export_type([operation_id/0]).
 -export_type([request_context/0]).
 -export_type([client_peer/0]).
+-export_type([validation_error/0]).
+-export_type([error_type/0]).
 
 -spec request_params(OperationID :: operation_id()) -> [Param :: request_param()].
 {{#apiInfo}}{{#apis}}
@@ -34,23 +68,6 @@ request_params('{{operationId}}') ->
 {{/operation}}{{/operations}}{{/apis}}{{/apiInfo}}
 request_params(_) ->
     error(unknown_operation).
-
--type rule() ::
-    {type, 'binary'} |
-    {type, 'integer'} |
-    {type, 'float'} |
-    {type, 'binary'} |
-    {type, 'boolean'} |
-    {type, 'date'} |
-    {type, 'datetime'} |
-    {enum, [atom()]} |
-    {max, Max :: number(), Type :: exclusive | inclusive} |
-    {min, Min :: number(), Type :: exclusive | inclusive} |
-    {max_length, MaxLength :: integer()} |
-    {min_length, MaxLength :: integer()} |
-    {pattern, Pattern :: string()} |
-    schema |
-    {required, boolean()}.
 
 -spec request_param_info(OperationID :: operation_id(), Name :: request_param()) -> #{
     source => qs_val | binding | header | body,
@@ -74,7 +91,7 @@ request_param_info(OperationID, Name) ->
     Validator :: {{packageName}}_validator:validator()
 ) ->
     {ok, Model :: #{}, Req :: cowboy_req:req()} |
-    {error, Reason :: any(), Req :: cowboy_req:req()}.
+    {error, Reason :: unavailable | binary(), Req :: cowboy_req:req()}.
 
 populate_request(OperationID, Req, Validator) ->
     Params = request_params(OperationID),
@@ -175,13 +192,25 @@ validate(Rule = {type, 'boolean'}, Name, Value, _Validator) ->
 
 validate(Rule = {type, 'date'}, Name, Value, _Validator) ->
     case is_binary(Value) of
-        true -> ok;
+        true ->
+            case validate_date(Value) of
+                {ok, _} ->
+                    ok;
+                {error, _} ->
+                    validation_error(Rule, Name)
+            end;
         false -> validation_error(Rule, Name)
     end;
 
 validate(Rule = {type, 'datetime'}, Name, Value, _Validator) ->
     case is_binary(Value) of
-        true -> ok;
+        true ->
+            case validate_datetime(Value) of
+                {ok, _} ->
+                    ok;
+                {error, _} ->
+                    validation_error(Rule, Name)
+            end;
         false -> validation_error(Rule, Name)
     end;
 
@@ -253,27 +282,13 @@ validate(Rule = {list, Format, Ruleset}, Name, Value, Validator) ->
             validation_error(Rule, Name)
     end;
 
-validate(Rule = schema, Name, Value, Validator) ->
+validate(_Rule = schema, Name, Value, Validator) ->
     Defname = list_to_binary("#/definitions/" ++ {{packageName}}_utils:to_list(Name)),
     case Validator(Value, Defname) of
         ok ->
             ok;
-        {error, [{schema_invalid, _, Error} | _]} ->
-            Info = #{
-                type => schema_invalid,
-                error => Error
-            },
-            validation_error(Rule, Name, Info);
-        {error, [{data_invalid, Schema, Error, _, Path} | _]} ->
-            Info = #{
-                type => data_invalid,
-                error => Error,
-                schema => Schema,
-                path => Path
-            },
-            validation_error(Rule, Name, Info);
-        {error, Reason} ->
-            throw(Reason)
+        {error, Errors} when is_list(Errors) ->
+            report_validation_errors(Name, Errors)
     end;
 
 validate(Rule, Name, _Value, _Validator) ->
@@ -294,15 +309,16 @@ get_split_pattern('tsv') ->
 get_split_pattern('pipes') ->
     <<"|">>.
 
--spec validation_error(Rule :: any(), Name :: any()) -> no_return().
+-spec validation_error(Rule :: any(), Name :: request_param()) -> no_return().
 
-validation_error(ViolatedRule, Name) ->
-    validation_error(ViolatedRule, Name, #{}).
+validation_error(Rule, Name) ->
+    Errors = [map_violated_rule(Rule)],
+    report_validation_errors(Name, Errors).
 
--spec validation_error(Rule :: any(), Name :: any(), Info :: #{}) -> no_return().
+-spec report_validation_errors(Name :: request_param(), [validation_error()]) -> no_return().
 
-validation_error(ViolatedRule, Name, Info) ->
-    throw({wrong_param, Name, ViolatedRule, Info}).
+report_validation_errors(Name, Errors) ->
+    throw({wrong_param, Name, Errors}).
 
 get_value(body, _Name, Req0) ->
     {ok, Body, Req} = cowboy_req:body(Req0),
@@ -346,9 +362,113 @@ prepare_param(Rules, Name, Value, Validator) ->
     try
         {ok, validate_param(Rules, Name, Value, Validator)}
     catch
+        throw:{wrong_param, Name, Errors} ->
+            Reasons = [get_error_reason(Name, E) || E <- Errors],
+            {error, error_message(Reasons)};
         throw:Reason ->
             {error, Reason}
     end.
 
+error_message(Reasons) ->
+    {{packageName}}_utils:join("\,", Reasons).
+
 binary_to_lower(V) when is_binary(V) ->
     list_to_binary(string:to_lower({{packageName}}_utils:to_list(V))).
+
+validate_date(Value) when is_binary(Value) ->
+    validate_datetime(<<Value/binary, "T00:00:00Z">>).
+
+validate_datetime(Value) when is_binary(Value) ->
+    rfc3339:parse(Value).
+
+map_violated_rule({type, Type}) ->
+    TypeName = map_type_name(Type),
+    #{
+        type => wrong_type,
+        description => <<"Expected type is \"", TypeName/binary,"\"">>
+    };
+
+map_violated_rule({enum, _}) ->
+    #{
+        type => not_in_range
+    };
+
+map_violated_rule({max, _, _}) ->
+    #{
+        type => wrong_size
+    };
+
+map_violated_rule({min, _, _}) ->
+    #{
+        type => wrong_size
+    };
+
+map_violated_rule({max_length, _}) ->
+    #{
+        type => wrong_length
+    };
+
+map_violated_rule({min_length, _}) ->
+    #{
+        type => wrong_length
+    };
+
+map_violated_rule({pattern, _}) ->
+    #{
+        type => no_match
+    };
+
+map_violated_rule({required, _}) ->
+    #{
+        type => not_found
+    }.
+
+
+-spec get_error_reason(Field :: request_param(), validation_error()) -> binary().
+
+get_error_reason(Field0, Error = #{type := Type}) ->
+    Field = {{packageName}}_utils:to_binary(Field0),
+    Reason = map_error_reason(Type),
+    Desciption = map_error_description(maps:get(description, Error, undefined)),
+    <<"Field \"", Field/binary, "\" is not valid. ", Reason/binary, " ", Desciption/binary>>.
+
+map_error_reason(no_match) ->
+    <<"Value doesn't match the pattern.">>;
+
+map_error_reason(not_found) ->
+    <<"Value not found.">>;
+
+map_error_reason(not_in_range) ->
+    <<"Value is not in range of permitted fields.">>;
+
+map_error_reason(wrong_length) ->
+    <<"Value has wrong length.">>;
+
+map_error_reason(wrong_size) ->
+    <<"Value has wrong type.">>;
+
+map_error_reason(wrong_type) ->
+    <<"Value has wrong type.">>;
+
+map_error_reason(schema_violated) ->
+    <<"Value violates schema.">>.
+
+map_error_description(undefined) ->
+    <<"">>;
+
+map_error_description(Description) when is_binary(Description) ->
+    Description.
+
+map_type_name('binary') ->
+    <<"string">>;
+map_type_name('integer') ->
+    <<"integer">>;
+map_type_name('float') ->
+    <<"number">>;
+map_type_name('boolean') ->
+    <<"boolean">>;
+map_type_name('date') ->
+    <<"date">>;
+map_type_name('datetime') ->
+    <<"date-time">>.
+
