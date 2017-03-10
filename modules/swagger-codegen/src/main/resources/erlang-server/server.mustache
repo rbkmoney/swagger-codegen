@@ -13,7 +13,7 @@
     ip                  => inet:ip_address(),
     port                => inet:port_number(),
     net_opts            => [],
-    validator_pool_opts => swagger_validator:pool_options()
+    validator_pool_opts => {{packageName}}_validator:pool_options()
 }.
 
 -spec child_spec(id(), params()) -> supervisor:child_spec().

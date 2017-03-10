@@ -21,7 +21,9 @@
 
 -type rule() ::
     {type, 'binary'} |
-    {type, 'integer'} |
+    {type, 'byte'} |
+    {type, 'int32'} |
+    {type, 'int64'} |
     {type, 'float'} |
     {type, 'boolean'} |
     {type, 'date'} |
@@ -44,7 +46,6 @@
     no_match |
     not_found |
     not_in_range |
-    not_multiple_of |
     wrong_length |
     wrong_size |
     schema_violated |
@@ -146,19 +147,31 @@ validate_response_body(_, ReturnBaseType, Body, Validator) ->
 
 validate(Rule = {required, Req}, Name, Value, _Validator) ->
     case Value of
-        undefined when Req -> validation_error(Rule, Name);
+        undefined when Req -> report_validation_error(Rule, Name);
         _ -> ok
     end;
 
 validate(_, _Name, undefined, _Validator) ->
     ok;
 
-validate(Rule = {type, 'integer'}, Name, Value, _Validator) ->
+validate(Rule = {type, 'int64'}, Name, Value0, _Validator) ->
     try
-        {ok, {{packageName}}_utils:to_int(Value)}
+        Value = {{packageName}}_utils:to_int(Value0),
+        ok = validate_between(Value, -9223372036854775808, 922337203685477580),
+        {ok, Value}
     catch
         error:badarg ->
-            validation_error(Rule, Name)
+            report_validation_error(Rule, Name)
+    end;
+
+validate(Rule = {type, 'int32'}, Name, Value0, _Validator) ->
+    try
+        Value = {{packageName}}_utils:to_int(Value0),
+        ok = validate_between(Value, -2147483648, 2147483647),
+        {ok, Value}
+    catch
+        error:badarg ->
+            report_validation_error(Rule, Name)
     end;
 
 validate(Rule = {type, 'float'}, Name, Value, _Validator) ->
@@ -166,13 +179,20 @@ validate(Rule = {type, 'float'}, Name, Value, _Validator) ->
         {ok, {{packageName}}_utils:to_float(Value)}
     catch
         error:badarg ->
-            validation_error(Rule, Name)
+            report_validation_error(Rule, Name)
     end;
 
 validate(Rule = {type, 'binary'}, Name, Value, _Validator) ->
     case is_binary(Value) of
         true -> ok;
-        false -> validation_error(Rule, Name)
+        false -> report_validation_error(Rule, Name)
+    end;
+
+validate(Rule = {type, 'byte'}, Name, Value, _Validator) ->
+    try
+        validate_base64(Value)
+    catch error:badarg ->
+        report_validation_error(Rule, Name)
     end;
 
 validate(_Rule = {type, 'boolean'}, _Name, Value, _Validator) when is_boolean(Value) ->
@@ -183,11 +203,11 @@ validate(Rule = {type, 'boolean'}, Name, Value, _Validator) ->
     try
         case binary_to_existing_atom(V, utf8) of
             B when is_boolean(B) -> {ok, B};
-            _ -> validation_error(Rule, Name)
+            _ -> report_validation_error(Rule, Name)
         end
     catch
         error:badarg ->
-            validation_error(Rule, Name)
+            report_validation_error(Rule, Name)
     end;
 
 validate(Rule = {type, 'date'}, Name, Value, _Validator) ->
@@ -197,9 +217,9 @@ validate(Rule = {type, 'date'}, Name, Value, _Validator) ->
                 {ok, _} ->
                     ok;
                 {error, _} ->
-                    validation_error(Rule, Name)
+                    report_validation_error(Rule, Name)
             end;
-        false -> validation_error(Rule, Name)
+        false -> report_validation_error(Rule, Name)
     end;
 
 validate(Rule = {type, 'datetime'}, Name, Value, _Validator) ->
@@ -209,9 +229,9 @@ validate(Rule = {type, 'datetime'}, Name, Value, _Validator) ->
                 {ok, _} ->
                     ok;
                 {error, _} ->
-                    validation_error(Rule, Name)
+                    report_validation_error(Rule, Name)
             end;
-        false -> validation_error(Rule, Name)
+        false -> report_validation_error(Rule, Name)
     end;
 
 validate(Rule = {enum, Values}, Name, Value, _Validator) ->
@@ -219,11 +239,11 @@ validate(Rule = {enum, Values}, Name, Value, _Validator) ->
         FormattedValue = erlang:binary_to_existing_atom(Value, utf8),
         case lists:member(FormattedValue, Values) of
             true -> {ok, FormattedValue};
-            false -> validation_error(Rule, Name)
+            false -> report_validation_error(Rule, Name)
         end
     catch
         error:badarg ->
-            validation_error(Rule, Name)
+            report_validation_error(Rule, Name)
     end;
 
 validate(Rule = {max, Max, Type}, Name, Value, _Validator) ->
@@ -237,7 +257,7 @@ validate(Rule = {max, Max, Type}, Name, Value, _Validator) ->
     end,
     case Result of
         true -> ok;
-        false -> validation_error(Rule, Name)
+        false -> report_validation_error(Rule, Name)
     end;
 
 validate(Rule = {min, Min, Type}, Name, Value, _Validator) ->
@@ -251,26 +271,26 @@ validate(Rule = {min, Min, Type}, Name, Value, _Validator) ->
     end,
     case Result of
         true -> ok;
-        false -> validation_error(Rule, Name)
+        false -> report_validation_error(Rule, Name)
     end;
 
 validate(Rule = {max_length, MaxLength}, Name, Value, _Validator) ->
     case size(Value) =< MaxLength of
         true -> ok;
-        false -> validation_error(Rule, Name)
+        false -> report_validation_error(Rule, Name)
     end;
 
 validate(Rule = {min_length, MinLength}, Name, Value, _Validator) ->
     case size(Value) >= MinLength of
         true -> ok;
-        false -> validation_error(Rule, Name)
+        false -> report_validation_error(Rule, Name)
     end;
 
 validate(Rule = {pattern, Pattern}, Name, Value, _Validator) ->
     {ok, MP} = re:compile(Pattern),
     case re:run(Value, MP) of
         {match, _} -> ok;
-        _ -> validation_error(Rule, Name)
+        _ -> report_validation_error(Rule, Name)
     end;
 
 validate(Rule = {list, Format, Ruleset}, Name, Value, Validator) ->
@@ -279,7 +299,7 @@ validate(Rule = {list, Format, Ruleset}, Name, Value, Validator) ->
         {ok, [validate_param(Ruleset, Name, V, Validator) || V <- Values]}
     catch
         error:badarg ->
-            validation_error(Rule, Name)
+            report_validation_error(Rule, Name)
     end;
 
 validate(_Rule = schema, Name, Value, Validator) ->
@@ -309,9 +329,9 @@ get_split_pattern('tsv') ->
 get_split_pattern('pipes') ->
     <<"|">>.
 
--spec validation_error(Rule :: any(), Name :: request_param()) -> no_return().
+-spec report_validation_error(Rule :: any(), Name :: request_param()) -> no_return().
 
-validation_error(Rule, Name) ->
+report_validation_error(Rule, Name) ->
     Errors = [map_violated_rule(Rule)],
     report_validation_errors(Name, Errors).
 
@@ -363,14 +383,22 @@ prepare_param(Rules, Name, Value, Validator) ->
         {ok, validate_param(Rules, Name, Value, Validator)}
     catch
         throw:{wrong_param, Name, Errors} ->
-            Reasons = [get_error_reason(Name, E) || E <- Errors],
-            {error, error_message(Reasons)};
+            {error, error_message(Name, Errors)};
         throw:Reason ->
             {error, Reason}
     end.
 
-error_message(Reasons) ->
-    {{packageName}}_utils:join("\,", Reasons).
+error_message(Name, Errors) ->
+    jsx:encode(lists:map(
+        fun(Error = #{type := Type}) ->
+            #{
+                <<"name">> => swagger_utils:to_binary(Name),
+                <<"errorType">> => swagger_utils:to_binary(Type),
+                <<"description">> => maps:get(description, Error, <<"">>)
+            }
+        end,
+        Errors
+    )).
 
 binary_to_lower(V) when is_binary(V) ->
     list_to_binary(string:to_lower({{packageName}}_utils:to_list(V))).
@@ -381,11 +409,9 @@ validate_date(Value) when is_binary(Value) ->
 validate_datetime(Value) when is_binary(Value) ->
     rfc3339:parse(Value).
 
-map_violated_rule({type, Type}) ->
-    TypeName = map_type_name(Type),
+map_violated_rule({type, _Type}) ->
     #{
-        type => wrong_type,
-        description => <<"Expected type is \"", TypeName/binary,"\"">>
+        type => wrong_type
     };
 
 map_violated_rule({enum, _}) ->
@@ -423,52 +449,27 @@ map_violated_rule({required, _}) ->
         type => not_found
     }.
 
+-spec validate_between(Value :: term(), Min :: integer(), Max :: integer()) -> ok | no_return().
 
--spec get_error_reason(Field :: request_param(), validation_error()) -> binary().
+validate_between(Value, Min, Max) when
+    is_integer(Value),
+    Value >= Min,
+    Value =< Max ->
+    ok;
 
-get_error_reason(Field0, Error = #{type := Type}) ->
-    Field = {{packageName}}_utils:to_binary(Field0),
-    Reason = map_error_reason(Type),
-    Desciption = map_error_description(maps:get(description, Error, undefined)),
-    <<"Field \"", Field/binary, "\" is not valid. ", Reason/binary, " ", Desciption/binary>>.
+validate_between(_, _, _) ->
+    error(badarg).
 
-map_error_reason(no_match) ->
-    <<"Value doesn't match the pattern.">>;
+-spec validate_base64(Value :: term()) -> ok | no_return().
 
-map_error_reason(not_found) ->
-    <<"Value not found.">>;
+validate_base64(Value) when is_binary(Value) ->
+    try
+        _ = base64:decode(Value),
+        ok
+    catch
+        _:_ ->
+            error(badarg)
+    end;
 
-map_error_reason(not_in_range) ->
-    <<"Value is not in range of permitted fields.">>;
-
-map_error_reason(wrong_length) ->
-    <<"Value has wrong length.">>;
-
-map_error_reason(wrong_size) ->
-    <<"Value has wrong type.">>;
-
-map_error_reason(wrong_type) ->
-    <<"Value has wrong type.">>;
-
-map_error_reason(schema_violated) ->
-    <<"Value violates schema.">>.
-
-map_error_description(undefined) ->
-    <<"">>;
-
-map_error_description(Description) when is_binary(Description) ->
-    Description.
-
-map_type_name('binary') ->
-    <<"string">>;
-map_type_name('integer') ->
-    <<"integer">>;
-map_type_name('float') ->
-    <<"number">>;
-map_type_name('boolean') ->
-    <<"boolean">>;
-map_type_name('date') ->
-    <<"date">>;
-map_type_name('datetime') ->
-    <<"date-time">>.
-
+validate_base64(_) ->
+    error(badarg).
