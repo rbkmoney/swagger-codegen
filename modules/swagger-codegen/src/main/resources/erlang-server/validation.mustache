@@ -1,0 +1,42 @@
+-module({{packageName}}_validation).
+
+-type rule() ::
+	schema |
+	param_rule().
+
+-type param_rule() ::
+    {type, 'binary'} |
+    {type, 'byte'} |
+    {type, 'int32'} |
+    {type, 'int64'} |
+    {type, 'float'} |
+    {type, 'boolean'} |
+    {type, 'date'} |
+    {type, 'datetime'} |
+    {enum, [atom()]} |
+    {max, Max :: number(), Type :: exclusive | inclusive} |
+    {min, Min :: number(), Type :: exclusive | inclusive} |
+    {max_length, MaxLength :: integer()} |
+    {min_length, MaxLength :: integer()} |
+    {pattern, Pattern :: string()} |
+    {required, boolean()}.
+
+-type validation_error() :: #{
+    type := error_type(),
+    description => binary()
+}.
+
+-type error_type() ::
+    no_match |
+    not_found |
+    not_in_range |
+    wrong_length |
+    wrong_size |
+    schema_violated |
+    wrong_type.
+
+
+-export_type([rule/0]).
+-export_type([param_rule/0]).
+-export_type([validation_error/0]).
+-export_type([error_type/0]).

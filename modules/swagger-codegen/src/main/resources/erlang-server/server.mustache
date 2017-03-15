@@ -1,5 +1,7 @@
 -module({{packageName}}_server).
 
+-behaviour(supervisor).
+
 -define(DEFAULT_ACCEPTORS_POOLSIZE, 100).
 -define(DEFAULT_LOGIC_HANDLER, {{packageName}}_default_logic_handler).
 

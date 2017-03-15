@@ -1,4 +1,6 @@
--module({{packageName}}_validator).
+-module({{packageName}}_schema_validator).
+
+-behaviour(gen_server).
 
 -export([child_spec/2]).
 -export([get_validator/1]).
@@ -17,15 +19,17 @@
 -export_type([validator/0]).
 -export_type([pool_options/0]).
 
+-define(DEFAULT_SCHEMA_VER, <<"http://json-schema.org/draft-04/schema#">>).
+
 -type json() :: jsx:json_term().
 -type defname() :: binary().
--type validate_error() :: {{packageName}}_api:validation_error().
--type validator() :: fun((json(), defname()) -> ok | {error, {{packageName}}_api:validation_error() | unavailable}).
+-type error_reason() :: binary().
+-type validator() :: fun((json(), defname()) -> ok | {error, [error_reason()] | unavailable}).
 
 -type pool_time_interval() :: {non_neg_integer(), min | sec | ms}.
 -type pool_options() :: #{
     name                 => term(),
-    start_mfa            => {atom(), atom(), list()},
+    start_mfa            => {atom(), atom(), start_args()},
     max_count            => non_neg_integer(),
     init_count           => non_neg_integer(),
     cull_interval        => pool_time_interval(),
@@ -33,9 +37,14 @@
     member_start_timeout => pool_time_interval()
 }.
 
+-type start_args() :: #{
+    schema_ver => binary()
+}.
+
 -define(DEFAULT_POOL_OPTIONS, #{
     init_count => 1,
-    max_count  => 20
+    max_count  => 20,
+    start_mfa => {?MODULE, start_link, [#{}]}
 }).
 
 -define(DEFAULT_TAKE_TIMEOUT, {3, sec}).
@@ -48,14 +57,13 @@ child_spec(ID, PoolOptions) ->
         maps:merge(
             maps:merge(?DEFAULT_POOL_OPTIONS, PoolOptions),
             #{
-                name      => construct_pool_name(ID),
-                start_mfa => {?MODULE, start_link, []}
+                name => construct_pool_name(ID)
             }
         )
     )).
 
 -spec validate(ID :: atom(), json(), defname()) ->
-    ok | {error, [validate_error()] | unavailable}.
+    ok | {error, [error_reason()] | unavailable}.
 
 validate(ID, Json, Defname) ->
     validate_(construct_pool_name(ID), Json, Defname).
@@ -106,9 +114,10 @@ do_validate(Pid, Json, Defname) ->
 -spec init(_) ->
     {ok, state()}.
 
-init(_) ->
+init(Options) ->
+    SchemaVer = maps:get(schema_ver, Options, ?DEFAULT_SCHEMA_VER),
     Schema = get_swagger_schema(),
-    {ok, prepare_validator(Schema)}.
+    {ok, prepare_validator(Schema, SchemaVer)}.
 
 -spec handle_call({validate, json(), defname()} | _, _From, state()) ->
     {reply, ok | {error, [term()]}, state()} | {noreply, state()}.
@@ -124,8 +133,8 @@ handle_call({validate, Json, Defname}, _From, State) ->
         {reply, ok, State}
     catch
         throw:Errors when is_list(Errors) ->
-            ValidationErrors = [map_error(E) || E <- Errors],
-            {reply, {error, ValidationErrors}, State}
+            Reasons = [map_error_reason(E) || E <- Errors],
+            {reply, {error, Reasons}, State}
     end;
 
 handle_call(_Call, _From, State) ->
@@ -153,7 +162,7 @@ code_change(_, State, _) ->
 terminate(_, _) ->
     ok.
 
-map_error({
+map_error_reason({
     'data_invalid',
     _Schema,
     Error,
@@ -162,10 +171,7 @@ map_error({
 }) ->
     Path = get_error_path(Path0),
     Description = get_error_description(Error),
-    #{
-        type => schema_violated,
-        description => {{packageName}}_utils:join(".", [Description, Path])
-    }.
+    {{packageName}}_utils:join(".", [Description, Path]).
 
 get_error_description(all_schemas_not_valid) ->
     {schema_violated, <<"Schema rule \"AllOf\" violated">>};
@@ -227,8 +233,8 @@ get_error_path(Path) ->
     <<"Path to item: ", PreparedPath/binary>>.
 %%
 
-prepare_validator(Schema) ->
-    jesse_state:new(Schema, [{default_schema_ver, <<"http://json-schema.org/draft-04/schema#">>}]).
+prepare_validator(Schema, SchemaVer) ->
+    jesse_state:new(Schema, [{default_schema_ver, SchemaVer}]).
 
 get_swagger_schema() ->
     {ok, AppName} = application:get_application(?MODULE),

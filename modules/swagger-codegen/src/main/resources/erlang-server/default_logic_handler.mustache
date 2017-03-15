@@ -24,7 +24,7 @@ authorize_api_key(_, _) ->
     Req :: cowboy_req:req(),
     Context :: {{packageName}}_api:request_context()
 ) ->
-    {Status :: cowboy:http_status(), Headers :: cowboy:http_headers(), Body :: #{}}.
+    {Status :: cowboy:http_status(), Headers :: cowboy:http_headers(), Body :: map()}.
 
 handle_request(OperationID, Req, Context) ->
     error_logger:error_msg(
