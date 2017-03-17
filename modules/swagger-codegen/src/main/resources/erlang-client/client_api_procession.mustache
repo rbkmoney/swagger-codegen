@@ -4,7 +4,7 @@
     operation_id    := operation_id(),
     validator_state := validator_state()
 }.
--type operation_id()    :: swagger_client_api_validation:operation_id().
+-type operation_id()    :: {{packageName}}_client_api_validation:operation_id().
 -type validator_state() :: jesse_state:state().
 -type json_schema()     :: jesse:json_term().
 -type params() :: #{
@@ -12,7 +12,7 @@
     binding     := any(),
     body        := any(),
     qs_val      := any(),
-    json_schema := json_schema()
+    json_schema => json_schema()
 }.
 -type url()    :: string().
 -type method() :: atom().
@@ -51,7 +51,7 @@ handle_request_json(RequestParams, #{operation_id := OperationID, validator_stat
 -spec populate_request(operation_id(), params(), validator_state()) ->
     {ok, Params :: map()} | {error, Reason :: any(), Req :: term()}.
 populate_request(OperationID, RequestParams, ValidatorState) ->
-    Params = swagger_client_api_validation:request_params(OperationID),
+    Params = {{packageName}}_client_api_validation:request_params(OperationID),
     populate_request_params(OperationID, Params, RequestParams, ValidatorState).
 
 populate_request_params(_, [], RequestParams, _) ->
@@ -65,7 +65,7 @@ populate_request_params(OperationID, [FieldParams | T], RequestParams, Validator
     end.
 
 populate_request_param(OperationID, Name, RequestParams0, ValidatorState) ->
-    #{rules := Rules, source := Source} = swagger_client_api_validation:request_param_info(OperationID, Name),
+    #{rules := Rules, source := Source} = {{packageName}}_client_api_validation:request_param_info(OperationID, Name),
     {Value, RequestParams} = get_value(Source, Name, RequestParams0),
     case prepare_param(Rules, Name, Value, ValidatorState) of
         {ok, Result} -> {ok, Name, Result, RequestParams};
@@ -77,7 +77,7 @@ prepare_param(Rules, Name, Value, ValidatorState) ->
     try
         Result = lists:foldl(
             fun(Rule, Acc) ->
-                case swagger_client_api_validation:validate(Rule, swagger_client_api_utils:to_binary(Name), Acc, ValidatorState) of
+                case {{packageName}}_client_api_validation:validate(Rule, {{packageName}}_client_api_utils:to_binary(Name), Acc, ValidatorState) of
                     ok -> Acc;
                     {ok, Prepared} -> Prepared
                 end
@@ -104,7 +104,7 @@ get_swagger_path() ->
     case application:get_env(swagger_json_path) of
         undefined ->
             {ok, AppName} = application:get_application(?MODULE),
-            Dir = swagger_client_api_utils:priv_dir(AppName),
+            Dir = {{packageName}}_client_api_utils:priv_dir(AppName),
             filename:join(Dir, "swagger.json");
         {ok, Path} ->
             Path
@@ -117,15 +117,15 @@ get_value(body, _Name, RequestParams) ->
     {Value, RequestParams};
 get_value(qs_val, Name, RequestParams) ->
     QueryParams = maps:get(qs_val, RequestParams),
-    Value = get_opt(swagger_client_api_utils:to_binary(Name), QueryParams),
+    Value = get_opt({{packageName}}_client_api_utils:to_binary(Name), QueryParams),
     {Value, RequestParams};
 get_value(header, Name, RequestParams) ->
     HeaderParams = maps:get(header, RequestParams),
-    Value = get_opt(swagger_client_api_utils:to_binary(Name), HeaderParams),
+    Value = get_opt({{packageName}}_client_api_utils:to_binary(Name), HeaderParams),
     {Value, RequestParams};
 get_value(binding, Name, RequestParams) ->
     BindingParams = maps:get(binding, RequestParams),
-    Value = get_opt(swagger_client_api_utils:to_binary(Name), BindingParams),
+    Value = get_opt({{packageName}}_client_api_utils:to_binary(Name), BindingParams),
     {Value, RequestParams}.
 
 
@@ -137,4 +137,4 @@ get_opt(Key, Opts, Default) ->
 
 
 prepare_url(Url, Params, Qs) ->
-    swagger_client_api_utils:fill_url(Url, Params, Qs).
+    {{packageName}}_client_api_utils:fill_url(Url, Params, Qs).
