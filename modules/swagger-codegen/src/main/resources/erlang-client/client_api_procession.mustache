@@ -1,22 +1,31 @@
 -module({{packageName}}_client_api_procession).
 
--record(state, {
-    operation_id :: operation_id(),
-    validator_state :: jesse_state:state()
-}).
-
--type operation_id() :: {{packageName}}_client_api_validation:operation_id().
--type state() :: #state{}.
--type params() :: #{header => any(), binding => any(), body => any(), qs_val => any()}.
+-type state() :: #{
+    operation_id    := operation_id(),
+    validator_state := validator_state()
+}.
+-type operation_id()    :: {{packageName}}_client_api_validation:operation_id().
+-type validator_state() :: jesse_state:state().
+-type json_schema()     :: jesse:json_term().
+-type params() :: #{
+    header      := any(),
+    binding     := any(),
+    body        := any(),
+    qs_val      := any(),
+    json_schema => json_schema()
+}.
+-type url()    :: string().
+-type method() :: atom().
+-type code()   :: pos_integer().
 
 -export([process_request/4]).
 
--spec process_request(Method::atom(), OperationID::operation_id(), Url::string(), Params::params()) ->
-    {ok, Code::integer(), RespHeaders::list(), {ok, binary()}}.
+-spec process_request(method(), operation_id(), url(), params()) ->
+    {ok, code(), list(), {ok, binary()}} | {error, _Reason}.
 process_request(Method, OperationID, Url, Params) ->
-    State = #state{
-        operation_id = OperationID,
-        validator_state = prepare_validator()
+    State = #{
+        operation_id    => OperationID,
+        validator_state => prepare_validator(maps:get(json_schema, Params))
     },
 
     case handle_request_json(Params, State) of
@@ -29,15 +38,9 @@ process_request(Method, OperationID, Url, Params) ->
             {error, Reason}
     end.
 
--spec handle_request_json(RequestParams::params(), State::state()) ->
+-spec handle_request_json(params(), state()) ->
     {ok, UrlParams::map(), HeaderParams::map(), BodyParams::map(), QueryParams::map()} | {error, term()}.
-handle_request_json(
-    RequestParams,
-    _State = #state{
-        operation_id = OperationID,
-        validator_state = ValidatorState
-    }
-) ->
+handle_request_json(RequestParams, #{operation_id := OperationID, validator_state := ValidatorState}) ->
     case populate_request(OperationID, RequestParams, ValidatorState) of
         {ok, Params} ->
             {ok, maps:get(binding, Params), maps:get(header, Params), maps:get(body, Params), maps:get(qs_val, Params)};
@@ -45,13 +48,8 @@ handle_request_json(
             {error, Reason}
     end.
 
--spec populate_request(
-    OperationID :: operation_id(),
-    RequestParams :: term(),
-    ValidatorState :: jesse_state:state()
-) ->
-    {ok, Params :: map()} |
-    {error, Reason :: any(), Req :: term()}.
+-spec populate_request(operation_id(), params(), validator_state()) ->
+    {ok, Params :: map()} | {error, Reason :: any(), Req :: term()}.
 populate_request(OperationID, RequestParams, ValidatorState) ->
     Params = {{packageName}}_client_api_validation:request_params(OperationID),
     populate_request_params(OperationID, Params, RequestParams, ValidatorState).
@@ -93,32 +91,40 @@ prepare_param(Rules, Name, Value, ValidatorState) ->
             {error, Reason}
     end.
 
-prepare_validator() ->
-    R = jsx:decode(element(2, file:read_file(get_swagger_path()))),
-    jesse_state:new(R, [{default_schema_ver, <<"http://json-schema.org/draft-04/schema#">>}]).
+-spec prepare_validator(json_schema() | undefined) ->
+    validator_state().
+prepare_validator(undefined) ->
+    prepare_validator(element(2, file:read_file(get_swagger_path())));
+prepare_validator(Schema) ->
+    jesse_state:new(jsx:decode(Schema), [{default_schema_ver, <<"http://json-schema.org/draft-04/schema#">>}]).
 
-
+-spec get_swagger_path() ->
+    file:filename_all().
 get_swagger_path() ->
-    {ok, AppName} = application:get_application(?MODULE),
-    filename:join({{packageName}}_client_api_utils:priv_dir(AppName), "swagger.json").
+    case application:get_env(swagger_json_path) of
+        undefined ->
+            {ok, AppName} = application:get_application(?MODULE),
+            Dir = {{packageName}}_client_api_utils:priv_dir(AppName),
+            filename:join(Dir, "swagger.json");
+        {ok, Path} ->
+            Path
+    end.
 
--spec get_value(atom(), term(), term()) -> term().
+-spec get_value(atom(), any(), params()) ->
+    {any(), params()}.
 get_value(body, _Name, RequestParams) ->
     Value = maps:get(body, RequestParams),
     {Value, RequestParams};
-
 get_value(qs_val, Name, RequestParams) ->
     QueryParams = maps:get(qs_val, RequestParams),
     Value = get_opt({{packageName}}_client_api_utils:to_binary(Name), QueryParams),
     {Value, RequestParams};
-
 get_value(header, Name, RequestParams) ->
-    HeaderParams = maps:get(header, RequestParams, #{}),
+    HeaderParams = maps:get(header, RequestParams),
     Value = get_opt({{packageName}}_client_api_utils:to_binary(Name), HeaderParams),
     {Value, RequestParams};
-
 get_value(binding, Name, RequestParams) ->
-    BindingParams = maps:get(binding, RequestParams, #{}),
+    BindingParams = maps:get(binding, RequestParams),
     Value = get_opt({{packageName}}_client_api_utils:to_binary(Name), BindingParams),
     {Value, RequestParams}.
 
