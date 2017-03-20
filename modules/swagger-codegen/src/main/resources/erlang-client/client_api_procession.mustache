@@ -96,7 +96,7 @@ prepare_param(Rules, Name, Value, ValidatorState) ->
 prepare_validator(undefined) ->
     prepare_validator(element(2, file:read_file(get_swagger_path())));
 prepare_validator(Schema) ->
-    jesse_state:new(jsx:decode(Schema), [{default_schema_ver, <<"http://json-schema.org/draft-04/schema#">>}]).
+    jesse_state:new(jsx:decode(Schema), [{validator, {{packageName}}_jesse_validator_swagger_2_0}]).
 
 -spec get_swagger_path() ->
     file:filename_all().

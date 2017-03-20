@@ -233,8 +233,8 @@ get_error_path(Path) ->
     <<"Path to item: ", PreparedPath/binary>>.
 %%
 
-prepare_validator(Schema, SchemaVer) ->
-    jesse_state:new(Schema, [{default_schema_ver, SchemaVer}]).
+prepare_validator(Schema) ->
+    jesse_state:new(Schema, [{validator, {{packageName}}_jesse_validator_swagger_2_0}]).
 
 get_swagger_schema() ->
     {ok, AppName} = application:get_application(?MODULE),

@@ -1,0 +1,284 @@
+-module({{packageName}}_jesse_validator_swagger_2_0).
+
+-behaviour(jesse_schema_validator).
+
+%% API
+-export([check_value/3]).
+
+-define(DISCRIMINATOR, <<"discriminator">>).
+-define(DISCRIMINATOR_TAG(Discriminator, SchemaName),
+    {discriminator, Discriminator, SchemaName}
+).
+-define(NOT_FOUND, not_found).
+
+-spec check_value(Value, JsonSchema, State) ->
+  {Value, JsonSchema, State} | no_return()
+    when
+    Value      :: any(),
+    JsonSchema :: jesse:json_term(),
+    State      :: jesse_state:state().
+check_value(Value, [{?DISCRIMINATOR, Discriminator} | Attrs], State) ->
+  {NewAttrs, NewState} = case jesse_lib:is_json_object(Value) of
+               true  -> check_discriminator(Value, Discriminator, Attrs, State);
+               false -> {Attrs, State}
+             end,
+  {Value, NewAttrs, NewState};
+check_value(Value, JsonSchema, State) ->
+  jesse_validator_draft4:check_value(Value, JsonSchema, State).
+
+check_discriminator(Value, Discriminator, Attrs, State)
+  when is_binary(Discriminator) ->
+    case get_value(Discriminator, Value) of
+        ?NOT_FOUND ->
+            {Attrs, State};
+        SchemaName ->
+            case get_current_path(State) of
+                %% Got back here from the child schema ref -
+                %% skip further validation.
+                [?DISCRIMINATOR_TAG(Discriminator, SchemaName) | _] ->
+                    {[], State};
+                _ ->
+                    {Attrs, check_child_schema(Value, SchemaName, Discriminator, State)}
+            end
+    end.
+
+check_child_schema(Value, SchemaName, Discriminator, State) ->
+  State1 = add_to_path(State, ?DISCRIMINATOR_TAG(Discriminator, SchemaName)),
+  Schema = [{<<"$ref">>, <<"#/definitions/", SchemaName/binary>>}],
+  State2 = jesse_schema_validator:validate_with_state(Schema, Value, State1),
+  remove_last_from_path(State2).
+
+get_value(Key, Schema) ->
+  jesse_json_path:value(Key, Schema, ?NOT_FOUND).
+
+add_to_path(State, Property) ->
+  jesse_state:add_to_path(State, Property).
+
+remove_last_from_path(State) ->
+  jesse_state:remove_last_from_path(State).
+
+get_current_path(State) ->
+  jesse_state:get_current_path(State).
+
+
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+
+-define(SCHEMA,
+  <<"{\"definitions\": {
+       \"Pet\": {
+         \"type\":          \"object\",
+         \"discriminator\": \"type\",
+         \"properties\": {
+            \"name\":    {\"type\": \"string\"},
+            \"owner\":   {\"$ref\": \"#/definitions/Owner\"},
+            \"petType\": {\"type\": \"string\"}
+         },
+         \"required\": [\"name\", \"type\"]
+       },
+       \"Cat\": {
+         \"description\": \"A representation of a cat\",
+         \"allOf\": [
+           {\"$ref\": \"#/definitions/Pet\"},
+           {
+             \"type\":       \"object\",
+             \"properties\": {
+               \"huntingSkill\": {
+                 \"type\":        \"string\",
+                 \"description\": \"The measured skill for hunting\",
+                 \"default\":     \"lazy\",
+                 \"enum\":        [\"clueless\", \"lazy\", \"adventurous\", \"aggressive\"]
+               }
+             },
+             \"required\": [\"huntingSkill\"]
+           }
+         ]
+       },
+       \"Dog\": {
+         \"description\": \"A representation of a dog\",
+         \"allOf\": [
+           {\"$ref\": \"#/definitions/Pet\"},
+           {
+             \"type\":       \"object\",
+             \"properties\": {
+               \"packSize\": {
+                 \"type\":        \"integer\",
+                 \"format\":      \"int32\",
+                 \"description\": \"the size of the pack the dog is from\",
+                 \"default\":     0,
+                 \"minimum\":     0
+               }
+             }
+           }
+         ],
+         \"required\": [\"packSize\"]
+       },
+       \"Owner\": {
+         \"type\":          \"object\",
+         \"discriminator\": \"type\",
+         \"properties\": {
+            \"soleOwner\": {\"type\": \"boolean\"},
+            \"type\": {\"type\": \"string\"}
+         },
+         \"required\": [\"soleOwner\", \"type\"]
+       },
+       \"Family\": {
+         \"allOf\": [
+           {\"$ref\": \"#/definitions/Owner\"},
+           {
+             \"type\":       \"object\",
+             \"properties\": {
+               \"members\": {
+                 \"type\":  \"array\",
+                 \"items\": {\"$ref\": \"#/definitions/Person\"},
+                 \"minItems\": 1
+               }
+             },
+             \"required\": [\"members\"]
+           }
+         ]
+       },
+       \"Person\": {
+         \"allOf\": [
+           {\"$ref\": \"#/definitions/Owner\"},
+           {
+             \"type\":       \"object\",
+             \"properties\": {
+               \"name\": {\"type\": \"string\"},
+               \"age\":  {
+                 \"type\":    \"integer\",
+                 \"minimum\": 0,
+                 \"maximum\": 150
+               },
+               \"sex\": {
+                 \"type\": \"string\",
+                 \"enum\": [\"male\", \"female\"]
+               },
+               \"legalStatus\": {\"$ref\": \"#/definitions/LegalStatus\"}
+             },
+             \"required\": [\"age\", \"sex\"]
+           }
+         ]
+       },
+       \"LegalStatus\": {
+         \"type\":          \"object\",
+         \"discriminator\": \"status\",
+         \"properties\": {
+            \"status\": {\"type\": \"string\"}
+         },
+         \"required\": [\"status\"]
+       },
+       \"Single\": {
+         \"allOf\": [
+           {\"$ref\": \"#/definitions/LegalStatus\"},
+           {
+             \"type\":       \"object\",
+             \"properties\": {
+               \"minor\": {\"type\": \"boolean\"}
+             },
+             \"required\": [\"minor\"]
+           }
+         ]
+       },
+       \"Married\": {
+         \"allOf\": [
+           {\"$ref\": \"#/definitions/LegalStatus\"},
+           {
+             \"type\":       \"object\",
+             \"properties\": {
+               \"partnerName\": {\"type\": \"string\"}
+             },
+             \"required\": [\"partnerName\"]
+           }
+         ]
+       }
+     }}">>).
+
+-define(PET_SCHEMA, <<"Pet">>).
+
+-spec test() -> _.
+
+-spec init_jesse() -> _.
+init_jesse() ->
+    jesse_state:new(jsx:decode(?SCHEMA), [{validator, ?MODULE}]).
+
+-spec validate(binary(), binary()) -> success | failure.
+validate(DefName, Value) ->
+    State = init_jesse(),
+    try
+        jesse_schema_validator:validate_with_state(
+            [{<<"$ref">>, <<"#/definitions/", DefName/binary>>}],
+            Value,
+            State
+        ),
+        success
+    catch
+        throw:_ ->
+            failure
+    end.
+
+%% Test cases
+-spec success_test() -> _.
+success_test() ->
+    ?assertEqual(success, validate(?PET_SCHEMA, jsx:decode(<<"{
+        \"type\":         \"Cat\",
+        \"name\":         \"Flaffy\",
+        \"huntingSkill\": \"adventurous\",
+        \"owner\": {
+            \"type\":      \"Person\",
+            \"soleOwner\": true,
+            \"name\":      \"Robin\",
+            \"age\":       12,
+            \"sex\":       \"male\",
+            \"legalStatus\": {
+                \"status\": \"Single\",
+                \"minor\":  true
+            }
+        }
+    }">>))).
+
+-spec wrong_cat_test() -> _.
+wrong_cat_test() ->
+    ?assertEqual(failure, validate(?PET_SCHEMA, jsx:decode(<<"{
+        \"name\": \"Flaffy\",
+        \"type\": \"Cat\",
+        \"huntingSkill\": \"wrong\"
+    }">>))).
+
+-spec person_sex_missing_test() -> _.
+person_sex_missing_test() ->
+    ?assertEqual(failure, validate(?PET_SCHEMA, jsx:decode(<<"{
+        \"type\":         \"Cat\",
+        \"name\":         \"Flaffy\",
+        \"huntingSkill\": \"adventurous\",
+        \"owner\": {
+            \"type\":      \"Person\",
+            \"soleOwner\": true,
+            \"name\":      \"true\",
+            \"age\":       12,
+            \"legalStatus\": {
+                \"status\": \"Single\",
+                \"minor\":  true
+            }
+        }
+    }">>))).
+
+-spec legal_status_minor_flag_missing_test() -> _.
+legal_status_minor_flag_missing_test() ->
+    ?assertEqual(failure, validate(?PET_SCHEMA, jsx:decode(<<"{
+        \"type\":         \"Cat\",
+        \"name\":         \"Flaffy\",
+        \"huntingSkill\": \"adventurous\",
+        \"owner\": {
+            \"type\":      \"Person\",
+            \"soleOwner\": true,
+            \"name\":      \"true\",
+            \"age\":       12,
+            \"sex\":       \"male\",
+            \"legalStatus\": {
+                \"status\": \"Single\"
+            }
+        }
+    }">>))).
+
+-endif.
