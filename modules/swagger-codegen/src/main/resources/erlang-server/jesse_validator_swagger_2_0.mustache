@@ -4,61 +4,90 @@
 
 %% API
 -export([check_value/3]).
+-export([options/0]).
+-export([make_schema_ref/2]).
 
 -define(DISCRIMINATOR, <<"discriminator">>).
--define(DISCRIMINATOR_TAG(Discriminator, SchemaName),
-    {discriminator, Discriminator, SchemaName}
-).
 -define(NOT_FOUND, not_found).
 
+-spec options() ->
+    [{validator, module()} | {validator_state, []}].
+options() ->
+    [
+        {validator, ?MODULE},
+        {validator_state, []}
+    ].
+
+-spec make_schema_ref(RefBase, Element) -> Ref when
+    RefBase :: string(),
+    Element :: string(),
+    Ref     :: string().
+make_schema_ref(RefBase, Element) ->
+    RefBase ++ "#/definitions/" ++ Element.
+
 -spec check_value(Value, JsonSchema, State) ->
-  {Value, JsonSchema, State} | no_return()
-    when
+    {Value, JsonSchema, State} | no_return()
+when
     Value      :: any(),
     JsonSchema :: jesse:json_term(),
     State      :: jesse_state:state().
-check_value(Value, [{?DISCRIMINATOR, Discriminator} | Attrs], State) ->
+check_value(Value, [{?DISCRIMINATOR, DiscrField} | Attrs], State) ->
   {NewAttrs, NewState} = case jesse_lib:is_json_object(Value) of
-               true  -> check_discriminator(Value, Discriminator, Attrs, State);
-               false -> {Attrs, State}
-             end,
+      true  -> check_discriminator(Value, DiscrField, Attrs, State);
+      false -> {Attrs, State}
+  end,
   {Value, NewAttrs, NewState};
 check_value(Value, JsonSchema, State) ->
   jesse_validator_draft4:check_value(Value, JsonSchema, State).
 
-check_discriminator(Value, Discriminator, Attrs, State)
-  when is_binary(Discriminator) ->
-    case get_value(Discriminator, Value) of
+check_discriminator(Value, DiscrField, Attrs, State) when is_binary(DiscrField) ->
+    case get_value(DiscrField, Value) of
         ?NOT_FOUND ->
             {Attrs, State};
         SchemaName ->
-            case get_current_path(State) of
-                %% Got back here from the child schema ref -
-                %% skip further validation.
-                [?DISCRIMINATOR_TAG(Discriminator, SchemaName) | _] ->
-                    {[], State};
-                _ ->
-                    {Attrs, check_child_schema(Value, SchemaName, Discriminator, State)}
-            end
+            validate_discriminator(Value, {DiscrField, SchemaName}, State, Attrs)
     end.
 
-check_child_schema(Value, SchemaName, Discriminator, State) ->
-  State1 = add_to_path(State, ?DISCRIMINATOR_TAG(Discriminator, SchemaName)),
-  Schema = [{<<"$ref">>, <<"#/definitions/", SchemaName/binary>>}],
+validate_discriminator(Value, Discriminator, State, Attrs) ->
+    case get_discriminator(State) of
+        Discriminator ->
+            %% Got back here from the child schema ref, skip further validation.
+            {[], State};
+        _ ->
+            {Attrs, check_child_schema(Value, Discriminator, State)}
+    end.
+
+check_child_schema(Value, Discriminator = {_, SchemaName}, State) ->
+  State1 = add_discriminator(State, Discriminator),
+  Schema = make_ref_schema(<<"#/definitions/", SchemaName/binary>>),
   State2 = jesse_schema_validator:validate_with_state(Schema, Value, State1),
-  remove_last_from_path(State2).
+  remove_last_discriminator(State2).
 
 get_value(Key, Schema) ->
   jesse_json_path:value(Key, Schema, ?NOT_FOUND).
 
-add_to_path(State, Property) ->
-  jesse_state:add_to_path(State, Property).
+add_discriminator(State, Discriminator) ->
+  Path = jesse_state:get_validator_state(State),
+  jesse_state:set_validator_state(State, [Discriminator | Path]).
 
-remove_last_from_path(State) ->
-  jesse_state:remove_last_from_path(State).
+remove_last_discriminator(State) ->
+  case jesse_state:get_validator_state(State) of
+      [_ | Rest] ->
+          jesse_state:set_validator_state(State, Rest);
+      [] ->
+          State
+  end.
 
-get_current_path(State) ->
-  jesse_state:get_current_path(State).
+get_discriminator(State) ->
+  case jesse_state:get_validator_state(State) of
+      [Discriminator | _] ->
+          Discriminator;
+      [] ->
+          undefined
+  end.
+
+make_ref_schema(Ref) ->
+    [{<<"$ref">>, Ref}].
 
 
 -ifdef(TEST).
@@ -193,34 +222,34 @@ get_current_path(State) ->
          ]
        }
      }}">>).
+-define(SCHEMA_KEY, "pet.schema").
+-define(PET_SCHEMA, "Pet").
 
--define(PET_SCHEMA, <<"Pet">>).
-
--spec test() -> _.
-
--spec init_jesse() -> _.
 init_jesse() ->
-    jesse_state:new(jsx:decode(?SCHEMA), [{validator, ?MODULE}]).
+    jesse:add_schema(?SCHEMA_KEY, ?SCHEMA, [{parser_fun, fun jsx:decode/1}]).
 
--spec validate(binary(), binary()) -> success | failure.
 validate(DefName, Value) ->
-    State = init_jesse(),
-    try
-        jesse_schema_validator:validate_with_state(
-            [{<<"$ref">>, <<"#/definitions/", DefName/binary>>}],
-            Value,
-            State
-        ),
-        success
-    catch
-        throw:_ ->
-            failure
+    ok = init_jesse(),
+    case jesse:validate_ref(make_schema_ref(?SCHEMA_KEY, DefName), Value, options()) of
+        {ok, Value}    -> Value;
+        {error, Error} -> Error
     end.
 
+exception(BadSchema, BadData, PropertyPath) ->
+    [{
+        data_invalid,
+        make_ref_schema(BadSchema),
+        all_schemas_not_valid,
+        BadData,
+        PropertyPath
+     }].
+
 %% Test cases
+-spec test() -> _.
+
 -spec success_test() -> _.
 success_test() ->
-    ?assertEqual(success, validate(?PET_SCHEMA, jsx:decode(<<"{
+    Pet = jsx:decode(<<"{
         \"type\":         \"Cat\",
         \"name\":         \"Flaffy\",
         \"huntingSkill\": \"adventurous\",
@@ -235,21 +264,24 @@ success_test() ->
                 \"minor\":  true
             }
         }
-    }">>))).
+    }">>),
+    ?assertEqual(Pet, validate(?PET_SCHEMA, Pet)).
 
 -spec wrong_cat_test() -> _.
 wrong_cat_test() ->
-    ?assertEqual(failure, validate(?PET_SCHEMA, jsx:decode(<<"{
-        \"name\": \"Flaffy\",
+    Pet = jsx:decode(<<"{
+        \"name\": \"Fluffy\",
         \"type\": \"Cat\",
         \"huntingSkill\": \"wrong\"
-    }">>))).
+    }">>),
+    Expect = exception(<<"#/definitions/Pet">>, Pet, []),
+    ?assertEqual(Expect, validate(?PET_SCHEMA, Pet)).
 
 -spec person_sex_missing_test() -> _.
 person_sex_missing_test() ->
-    ?assertEqual(failure, validate(?PET_SCHEMA, jsx:decode(<<"{
+    Pet = jsx:decode(<<"{
         \"type\":         \"Cat\",
-        \"name\":         \"Flaffy\",
+        \"name\":         \"Fluffy\",
         \"huntingSkill\": \"adventurous\",
         \"owner\": {
             \"type\":      \"Person\",
@@ -261,13 +293,15 @@ person_sex_missing_test() ->
                 \"minor\":  true
             }
         }
-    }">>))).
+    }">>),
+    Expect = exception(<<"#/definitions/Owner">>, jesse_json_path:path(<<"owner">>, Pet), [<<"owner">>]),
+    ?assertEqual(Expect, validate(?PET_SCHEMA, Pet)).
 
 -spec legal_status_minor_flag_missing_test() -> _.
 legal_status_minor_flag_missing_test() ->
-    ?assertEqual(failure, validate(?PET_SCHEMA, jsx:decode(<<"{
+    Pet = jsx:decode(<<"{
         \"type\":         \"Cat\",
-        \"name\":         \"Flaffy\",
+        \"name\":         \"Fluffy\",
         \"huntingSkill\": \"adventurous\",
         \"owner\": {
             \"type\":      \"Person\",
@@ -279,6 +313,8 @@ legal_status_minor_flag_missing_test() ->
                 \"status\": \"Single\"
             }
         }
-    }">>))).
+    }">>),
+    Expect = exception(<<"#/definitions/Owner">>, jesse_json_path:path(<<"owner">>, Pet), [<<"owner">>]),
+    ?assertEqual(Expect, validate(?PET_SCHEMA, Pet)).
 
 -endif.

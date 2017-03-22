@@ -1,5 +1,7 @@
 -module({{classname}}).
 
+-export([init/0]).
+
 %% generated methods
 {{#operations}}{{#operation}}-export([{{operationId}}/3]).
 {{/operation}}{{/operations}}
@@ -14,3 +16,8 @@
         Params
     ).
 {{/operation}}{{/operations}}
+
+%%%
+-spec init() -> ok.
+init() ->
+    {{packageName}}_client_api_validation:load_schema().

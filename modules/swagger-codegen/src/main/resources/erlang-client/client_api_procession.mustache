@@ -1,18 +1,14 @@
 -module({{packageName}}_client_api_procession).
 
 -type state() :: #{
-    operation_id    := operation_id(),
-    validator_state := validator_state()
+    operation_id := operation_id()
 }.
 -type operation_id()    :: {{packageName}}_client_api_validation:operation_id().
--type validator_state() :: jesse_state:state().
--type json_schema()     :: jesse:json_term().
 -type params() :: #{
     header      := any(),
     binding     := any(),
     body        := any(),
-    qs_val      := any(),
-    json_schema => json_schema()
+    qs_val      := any()
 }.
 -type url()    :: string().
 -type method() :: atom().
@@ -24,8 +20,7 @@
     {ok, code(), list(), {ok, binary()}} | {error, _Reason}.
 process_request(Method, OperationID, Url, Params) ->
     State = #{
-        operation_id    => OperationID,
-        validator_state => prepare_validator(maps:get(json_schema, Params))
+        operation_id => OperationID
     },
 
     case handle_request_json(Params, State) of
@@ -40,44 +35,49 @@ process_request(Method, OperationID, Url, Params) ->
 
 -spec handle_request_json(params(), state()) ->
     {ok, UrlParams::map(), HeaderParams::map(), BodyParams::map(), QueryParams::map()} | {error, term()}.
-handle_request_json(RequestParams, #{operation_id := OperationID, validator_state := ValidatorState}) ->
-    case populate_request(OperationID, RequestParams, ValidatorState) of
+handle_request_json(RequestParams, #{operation_id := OperationID}) ->
+    case populate_request(OperationID, RequestParams) of
         {ok, Params} ->
             {ok, maps:get(binding, Params), maps:get(header, Params), maps:get(body, Params), maps:get(qs_val, Params)};
         {error, Reason, _} ->
             {error, Reason}
     end.
 
--spec populate_request(operation_id(), params(), validator_state()) ->
+-spec populate_request(operation_id(), params()) ->
     {ok, Params :: map()} | {error, Reason :: any(), Req :: term()}.
-populate_request(OperationID, RequestParams, ValidatorState) ->
+populate_request(OperationID, RequestParams) ->
     Params = {{packageName}}_client_api_validation:request_params(OperationID),
-    populate_request_params(OperationID, Params, RequestParams, ValidatorState).
+    populate_request_params(OperationID, Params, RequestParams).
 
 populate_request_params(_, [], RequestParams, _) ->
     {ok, RequestParams};
-populate_request_params(OperationID, [FieldParams | T], RequestParams, ValidatorState) ->
-    case populate_request_param(OperationID, FieldParams, RequestParams, ValidatorState) of
+populate_request_params(OperationID, [FieldParams | T], RequestParams) ->
+    case populate_request_param(OperationID, FieldParams, RequestParams) of
         {ok, _K, _V, RequestParams} ->
-            populate_request_params(OperationID, T, RequestParams, ValidatorState);
+            populate_request_params(OperationID, T, RequestParams);
         Error ->
             Error
     end.
 
-populate_request_param(OperationID, Name, RequestParams0, ValidatorState) ->
+populate_request_param(OperationID, Name, RequestParams0) ->
     #{rules := Rules, source := Source} = {{packageName}}_client_api_validation:request_param_info(OperationID, Name),
     {Value, RequestParams} = get_value(Source, Name, RequestParams0),
-    case prepare_param(Rules, Name, Value, ValidatorState) of
+    case prepare_param(Rules, Name, Value) of
         {ok, Result} -> {ok, Name, Result, RequestParams};
         {error, Reason} ->
             {error, Reason, RequestParams0}
     end.
 
-prepare_param(Rules, Name, Value, ValidatorState) ->
+prepare_param(Rules, Name, Value) ->
     try
         Result = lists:foldl(
             fun(Rule, Acc) ->
-                case {{packageName}}_client_api_validation:validate(Rule, {{packageName}}_client_api_utils:to_binary(Name), Acc, ValidatorState) of
+                case {{packageName}}_client_api_validation:validate(
+                         Rule,
+                         {{packageName}}_client_api_utils:to_binary(Name),
+                         Acc
+                     )
+                of
                     ok -> Acc;
                     {ok, Prepared} -> Prepared
                 end
@@ -89,25 +89,6 @@ prepare_param(Rules, Name, Value, ValidatorState) ->
     catch
         throw:Reason ->
             {error, Reason}
-    end.
-
--spec prepare_validator(json_schema() | undefined) ->
-    validator_state().
-prepare_validator(undefined) ->
-    prepare_validator(element(2, file:read_file(get_swagger_path())));
-prepare_validator(Schema) ->
-    jesse_state:new(jsx:decode(Schema), [{validator, {{packageName}}_jesse_validator_swagger_2_0}]).
-
--spec get_swagger_path() ->
-    file:filename_all().
-get_swagger_path() ->
-    case application:get_env(swagger_json_path) of
-        undefined ->
-            {ok, AppName} = application:get_application(?MODULE),
-            Dir = {{packageName}}_client_api_utils:priv_dir(AppName),
-            filename:join(Dir, "swagger.json");
-        {ok, Path} ->
-            Path
     end.
 
 -spec get_value(atom(), any(), params()) ->

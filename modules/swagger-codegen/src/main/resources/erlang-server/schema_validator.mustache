@@ -49,10 +49,13 @@
 
 -define(DEFAULT_TAKE_TIMEOUT, {3, sec}).
 
+-define(SCHEMA_KEY, "capi.swagger").
+
 -spec child_spec(ID :: atom(), PoolOptions :: pool_options()) ->
     supervisor:child_spec().
 
 child_spec(ID, PoolOptions) ->
+    ok = prepare_validator(),
     pooler:pool_child_spec(maps:to_list(
         maps:merge(
             maps:merge(?DEFAULT_POOL_OPTIONS, PoolOptions),
@@ -108,31 +111,22 @@ do_validate(Pid, Json, Defname) ->
 
 %%
 
--type state() ::
-    jesse_state:state().
+-type state() :: _.
 
 -spec init(start_args()) ->
     {ok, state()}.
 
-init(Options) ->
-    SchemaVer = maps:get(schema_ver, Options, ?DEFAULT_SCHEMA_VER),
-    Schema = get_swagger_schema(),
-    {ok, prepare_validator(Schema, SchemaVer)}.
+init(_) ->
+    {ok, []}.
 
 -spec handle_call({validate, json(), defname()} | _, _From, state()) ->
     {reply, ok | {error, [term()]}, state()} | {noreply, state()}.
 
 handle_call({validate, Json, Defname}, _From, State) ->
-    try
-        ResultState = jesse_schema_validator:validate_with_state(
-            [{<<"$ref">>, Defname}],
-            Json,
-            State
-        ),
-        ok = check_result(ResultState),
-        {reply, ok, State}
-    catch
-        throw:Errors when is_list(Errors) ->
+    case jesse:validate_ref(make_schema_ref(Defname), Json, validator_opts()) of
+        {ok, _} ->
+            {reply, ok, State};
+        {error, Errors} when is_list(Errors) ->
             Reasons = [map_error_reason(E) || E <- Errors],
             {reply, {error, Reasons}, State}
     end;
@@ -232,21 +226,20 @@ get_error_path(Path) ->
     PreparedPath = {{packageName}}_utils:join(".", Path),
     <<"Path to item: ", PreparedPath/binary>>.
 %%
-
-prepare_validator(Schema) ->
-    jesse_state:new(Schema, [{validator, {{packageName}}_jesse_validator_swagger_2_0}]).
+prepare_validator() ->
+    Schema = get_swagger_schema(),
+    jesse:add_schema(?SCHEMA_KEY, Schema, [{parser_fun, fun jsx:decode/1}]).
 
 get_swagger_schema() ->
     {ok, AppName} = application:get_application(?MODULE),
     Filepath = filename:join({{packageName}}_utils:priv_dir(AppName), "swagger.json"),
     {ok, Contents} = file:read_file(Filepath),
-    jsx:decode(Contents).
+    Contents.
 
--spec check_result(state()) -> ok | no_return().
+make_schema_ref(Defname) ->
+    {{packageName}}_jesse_validator_swagger_2_0:make_schema_ref(
+        ?SCHEMA_KEY, binary_to_list(Defname)
+    ).
 
-check_result(State) ->
-    ErrorList = jesse_state:get_error_list(State),
-    case ErrorList of
-        [] -> ok;
-        _  -> throw(ErrorList)
-    end.
+validator_opts() ->
+    {{packageName}}_jesse_validator_swagger_2_0:options().
