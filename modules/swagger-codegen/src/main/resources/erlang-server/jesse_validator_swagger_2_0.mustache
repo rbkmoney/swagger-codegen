@@ -8,7 +8,8 @@
 -export([make_schema_ref/2]).
 
 -define(DISCRIMINATOR, <<"discriminator">>).
--define(NOT_FOUND, not_found).
+-define(REF,           <<"$ref">>).
+-define(NOT_FOUND,     not_found).
 
 -spec options() ->
     [{validator, module()} | {validator_state, []}].
@@ -32,62 +33,56 @@ when
     JsonSchema :: jesse:json_term(),
     State      :: jesse_state:state().
 check_value(Value, [{?DISCRIMINATOR, DiscrField} | Attrs], State) ->
-  {NewAttrs, NewState} = case jesse_lib:is_json_object(Value) of
-      true  -> check_discriminator(Value, DiscrField, Attrs, State);
-      false -> {Attrs, State}
-  end,
-  {Value, NewAttrs, NewState};
+    NewState = case jesse_lib:is_json_object(Value) of
+        true  -> validate_discriminator(Value, DiscrField, State);
+        false -> State
+    end,
+    {Value, Attrs, NewState};
+check_value(Value, JsonSchema = [{?REF, Ref} | Attrs], State) ->
+    NewState = case is_recursive_ref(Ref, State) of
+        true -> State;
+        false -> validate_ref(Value, JsonSchema, State)
+    end,
+    {Value, Attrs, NewState};
 check_value(Value, JsonSchema, State) ->
-  jesse_validator_draft4:check_value(Value, JsonSchema, State).
+    jesse_validator_draft4:check_value(Value, JsonSchema, State).
 
-check_discriminator(Value, DiscrField, Attrs, State) when is_binary(DiscrField) ->
-    case get_value(DiscrField, Value) of
+%%
+
+validate_discriminator(Value, DiscrField, State) when is_binary(DiscrField) ->
+    case jesse_json_path:value(DiscrField, Value, ?NOT_FOUND) of
         ?NOT_FOUND ->
-            {Attrs, State};
+            State;
         SchemaName ->
-            validate_discriminator(Value, {DiscrField, SchemaName}, State, Attrs)
+            validate_child_schema(Value, SchemaName, State)
     end.
 
-validate_discriminator(Value, Discriminator, State, Attrs) ->
-    case get_discriminator(State) of
-        Discriminator ->
-            %% Got back here from the child schema ref, skip further validation.
-            {[], State};
-        _ ->
-            {Attrs, check_child_schema(Value, Discriminator, State)}
+validate_child_schema(Value, SchemaName, State) ->
+    Schema = make_ref_schema(<<"#/definitions/", SchemaName/binary>>),
+    jesse_schema_validator:validate_with_state(Schema, Value, State).
+
+validate_ref(Value, JsonSchema = [{_, Ref} | _], State) ->
+    State1         = add_ref_to_state(State, Ref),
+    {_, _, State2} = jesse_validator_draft4:check_value(Value, JsonSchema, State1),
+    remove_last_ref_from_state(State2).
+
+add_ref_to_state(State, Ref) ->
+    Path = jesse_state:get_validator_state(State),
+    jesse_state:set_validator_state(State, [Ref | Path]).
+
+remove_last_ref_from_state(State) ->
+    case jesse_state:get_validator_state(State) of
+        [_ | Rest] ->
+            jesse_state:set_validator_state(State, Rest);
+        [] ->
+            State
     end.
 
-check_child_schema(Value, Discriminator = {_, SchemaName}, State) ->
-  State1 = add_discriminator(State, Discriminator),
-  Schema = make_ref_schema(<<"#/definitions/", SchemaName/binary>>),
-  State2 = jesse_schema_validator:validate_with_state(Schema, Value, State1),
-  remove_last_discriminator(State2).
-
-get_value(Key, Schema) ->
-  jesse_json_path:value(Key, Schema, ?NOT_FOUND).
-
-add_discriminator(State, Discriminator) ->
-  Path = jesse_state:get_validator_state(State),
-  jesse_state:set_validator_state(State, [Discriminator | Path]).
-
-remove_last_discriminator(State) ->
-  case jesse_state:get_validator_state(State) of
-      [_ | Rest] ->
-          jesse_state:set_validator_state(State, Rest);
-      [] ->
-          State
-  end.
-
-get_discriminator(State) ->
-  case jesse_state:get_validator_state(State) of
-      [Discriminator | _] ->
-          Discriminator;
-      [] ->
-          undefined
-  end.
+is_recursive_ref(Ref, State) ->
+    lists:member(Ref, jesse_state:get_validator_state(State)).
 
 make_ref_schema(Ref) ->
-    [{<<"$ref">>, Ref}].
+    [{?REF, Ref}].
 
 
 -ifdef(TEST).

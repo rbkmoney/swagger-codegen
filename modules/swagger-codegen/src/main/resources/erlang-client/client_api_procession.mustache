@@ -74,7 +74,7 @@ prepare_param(Rules, Name, Value) ->
             fun(Rule, Acc) ->
                 case {{packageName}}_client_api_validation:validate(
                          Rule,
-                         {{packageName}}_client_api_utils:to_binary(Name),
+                         Name,
                          Acc
                      )
                 of

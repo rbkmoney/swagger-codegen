@@ -22,7 +22,7 @@
 -define(DEFAULT_SCHEMA_VER, <<"http://json-schema.org/draft-04/schema#">>).
 
 -type json() :: jsx:json_term().
--type defname() :: binary().
+-type defname() :: string().
 -type error_reason() :: binary().
 -type validator() :: fun((json(), defname()) -> ok | {error, [error_reason()] | unavailable}).
 
@@ -238,7 +238,7 @@ get_swagger_schema() ->
 
 make_schema_ref(Defname) ->
     {{packageName}}_jesse_validator_swagger_2_0:make_schema_ref(
-        ?SCHEMA_KEY, binary_to_list(Defname)
+        ?SCHEMA_KEY, Defname
     ).
 
 validator_opts() ->
