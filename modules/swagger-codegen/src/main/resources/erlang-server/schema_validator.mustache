@@ -18,13 +18,14 @@
 -export_type([defname/0]).
 -export_type([validator/0]).
 -export_type([pool_options/0]).
+-export_type([schema_uri/0]).
+-export_type([params/0]).
 
--define(DEFAULT_SCHEMA_VER, <<"http://json-schema.org/draft-04/schema#">>).
-
--type json() :: jsx:json_term().
--type defname() :: string().
--type error_reason() :: binary().
--type validator() :: fun((json(), defname()) -> ok | {error, [error_reason()] | unavailable}).
+-type json()           :: jsx:json_term().
+-type schema_uri()     :: string().
+-type defname()        :: string().
+-type error_reason()   :: binary().
+-type validator()      :: fun((json(), defname()) -> ok | {error, [error_reason()] | unavailable}).
 
 -type pool_time_interval() :: {non_neg_integer(), min | sec | ms}.
 -type pool_options() :: #{
@@ -37,8 +38,13 @@
     member_start_timeout => pool_time_interval()
 }.
 
--type start_args() :: #{
-    schema_ver => binary()
+-type params() :: #{
+    validator_pool_opts  => pool_options(),
+    validator_schema_uri := schema_uri()
+}.
+
+-type state() :: #{
+    schema_uri => schema_uri()
 }.
 
 -define(DEFAULT_POOL_OPTIONS, #{
@@ -49,18 +55,18 @@
 
 -define(DEFAULT_TAKE_TIMEOUT, {3, sec}).
 
--define(SCHEMA_KEY, "capi.swagger").
-
--spec child_spec(ID :: atom(), PoolOptions :: pool_options()) ->
+-spec child_spec(ID :: atom(), Params :: params()) ->
     supervisor:child_spec().
 
-child_spec(ID, PoolOptions) ->
-    ok = prepare_validator(),
+child_spec(ID, Params) ->
+    State       = prepare_state(Params),
+    PoolOptions = maps:get(validator_pool_opts, Params, #{}),
     pooler:pool_child_spec(maps:to_list(
         maps:merge(
             maps:merge(?DEFAULT_POOL_OPTIONS, PoolOptions),
             #{
-                name => construct_pool_name(ID)
+                name      => construct_pool_name(ID),
+                start_mfa => {?MODULE, start_link, [State]}
             }
         )
     )).
@@ -95,13 +101,26 @@ get_validator(ID) ->
         validate_(PoolName, Json, Defname)
     end.
 
--spec start_link(start_args()) ->
+-spec start_link(state()) ->
     {ok, pid()}.
 
-start_link(Options) ->
-    gen_server:start_link(?MODULE, Options, []).
+start_link(State) ->
+    gen_server:start_link(?MODULE, State, []).
 
 %%
+
+prepare_state(#{validator_schema_uri := SchemaUri}) ->
+    ok = prepare_validator(SchemaUri),
+    #{schema_uri => SchemaUri}.
+prepare_validator(SchemaUri) ->
+    Schema = get_swagger_schema(),
+    jesse:add_schema(SchemaUri, Schema, [{parser_fun, fun jsx:decode/1}]).
+
+get_swagger_schema() ->
+    {ok, AppName} = application:get_application(?MODULE),
+    Filepath = filename:join({{packageName}}_utils:priv_dir(AppName), "swagger.json"),
+    {ok, Contents} = file:read_file(Filepath),
+    Contents.
 
 construct_pool_name(ID) ->
     binary_to_atom(<<?MODULE_STRING, $_, (atom_to_binary(ID, utf8))/binary>>, utf8).
@@ -111,19 +130,17 @@ do_validate(Pid, Json, Defname) ->
 
 %%
 
--type state() :: _.
-
--spec init(start_args()) ->
+-spec init(state()) ->
     {ok, state()}.
 
-init(_) ->
-    {ok, []}.
+init(State) ->
+    {ok, State}.
 
 -spec handle_call({validate, json(), defname()} | _, _From, state()) ->
     {reply, ok | {error, [term()]}, state()} | {noreply, state()}.
 
-handle_call({validate, Json, Defname}, _From, State) ->
-    case jesse:validate_ref(make_schema_ref(Defname), Json, validator_opts()) of
+handle_call({validate, Json, Defname}, _From, State = #{schema_uri := SchemaUri}) ->
+    case jesse:validate_ref(make_schema_ref(Defname, SchemaUri), Json, validator_opts()) of
         {ok, _} ->
             {reply, ok, State};
         {error, Errors} when is_list(Errors) ->
@@ -226,19 +243,10 @@ get_error_path(Path) ->
     PreparedPath = {{packageName}}_utils:join(".", Path),
     <<"Path to item: ", PreparedPath/binary>>.
 %%
-prepare_validator() ->
-    Schema = get_swagger_schema(),
-    jesse:add_schema(?SCHEMA_KEY, Schema, [{parser_fun, fun jsx:decode/1}]).
 
-get_swagger_schema() ->
-    {ok, AppName} = application:get_application(?MODULE),
-    Filepath = filename:join({{packageName}}_utils:priv_dir(AppName), "swagger.json"),
-    {ok, Contents} = file:read_file(Filepath),
-    Contents.
-
-make_schema_ref(Defname) ->
+make_schema_ref(Defname, SchemaUri) ->
     {{packageName}}_jesse_validator_swagger_2_0:make_schema_ref(
-        ?SCHEMA_KEY, Defname
+        SchemaUri, Defname
     ).
 
 validator_opts() ->

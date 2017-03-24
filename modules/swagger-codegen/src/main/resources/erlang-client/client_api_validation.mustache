@@ -2,11 +2,12 @@
 
 -export([request_params/1]).
 -export([request_param_info/2]).
--export([load_schema/0]).
--export([validate/3]).
+-export([load_schema/1]).
+-export([validate/4]).
 -export([prepare_body/1]).
 
--type operation_id() :: atom().
+-type schema_uri()    :: string().
+-type operation_id()  :: atom().
 -type request_param() :: atom().
 
 -type client_peer() :: #{
@@ -16,8 +17,7 @@
 
 -export_type([operation_id/0]).
 -export_type([client_peer/0]).
-
--define(SCHEMA_KEY, "capi.swagger").
+-export_type([schema_uri/0]).
 
 -spec request_params(OperationID :: operation_id()) -> [Param :: request_param()].
 
@@ -69,9 +69,9 @@ request_param_info(OperationID, Name) ->
     error({unknown_param, OperationID, Name}).
 
 %%%
--spec load_schema(map()) -> ok.
-load_schema() ->
-    jesse:add_schema(?SCHEMA_KEY, get_schema(), [{parser_fun, fun jsx:decode/1}]).
+-spec load_schema(schema_uri()) -> ok.
+load_schema(SchemaUri) ->
+    jesse:add_schema(SchemaUri, get_schema(), [{parser_fun, fun jsx:decode/1}]).
 
 get_schema() ->
     {ok, Schema} = file:read_file(get_swagger_path()).
@@ -80,20 +80,20 @@ get_swagger_path() ->
     {ok, AppName} = application:get_application(?MODULE),
     filename:join({{packageName}}_client_api_utils:priv_dir(AppName), "swagger.json").
 
--spec validate(Rule :: rule(), Name :: term(), Value :: term()) -> ok | {ok, term()} | no_return().
-validate(Rule = {required, true}, Name, Value) ->
+-spec validate(Rule :: rule(), Name :: term(), Value :: term(), schema_uri()) -> ok | {ok, term()} | no_return().
+validate(Rule = {required, true}, Name, Value, _SchemaUri) ->
     case Value of
         undefined -> validation_error(Rule, Name);
         _ -> ok
     end;
 
-validate(_Rule = {required, false}, _Name, _Value) ->
+validate(_Rule = {required, false}, _Name, _Value, _SchemaUri) ->
     ok;
 
-validate(_, _Name, undefined) ->
+validate(_, _Name, undefined, _SchemaUri) ->
     ok;
 
-validate(Rule = {type, 'integer'}, Name, Value) ->
+validate(Rule = {type, 'integer'}, Name, Value, _SchemaUri) ->
     try
         {ok, {{packageName}}_client_api_utils:to_int(Value)}
     catch
@@ -101,7 +101,7 @@ validate(Rule = {type, 'integer'}, Name, Value) ->
             validation_error(Rule, Name)
     end;
 
-validate(Rule = {type, 'float'}, Name, Value) ->
+validate(Rule = {type, 'float'}, Name, Value, _SchemaUri) ->
     try
         {ok, {{packageName}}_client_api_utils:to_float(Value)}
     catch
@@ -109,16 +109,16 @@ validate(Rule = {type, 'float'}, Name, Value) ->
             validation_error(Rule, Name)
     end;
 
-validate(Rule = {type, 'binary'}, Name, Value) ->
+validate(Rule = {type, 'binary'}, Name, Value, _SchemaUri) ->
     case is_binary(Value) of
         true -> ok;
         false -> validation_error(Rule, Name)
     end;
 
-validate(_Rule = {type, 'boolean'}, _Name, Value) when is_boolean(Value) ->
+validate(_Rule = {type, 'boolean'}, _Name, Value, _SchemaUri) when is_boolean(Value) ->
     {ok, Value};
 
-validate(Rule = {type, 'boolean'}, Name, Value) ->
+validate(Rule = {type, 'boolean'}, Name, Value, _SchemaUri) ->
     V = binary_to_lower(Value),
     try
         case binary_to_existing_atom(V, utf8) of
@@ -130,7 +130,7 @@ validate(Rule = {type, 'boolean'}, Name, Value) ->
             validation_error(Rule, Name)
     end;
 
-validate(Rule = {type, 'date'}, Name, Value) ->
+validate(Rule = {type, 'date'}, Name, Value, _SchemaUri) ->
     case is_binary(Value) of
         true ->
             case validate_date(Value) of
@@ -142,7 +142,7 @@ validate(Rule = {type, 'date'}, Name, Value) ->
         false -> validation_error(Rule, Name)
     end;
 
-validate(Rule = {type, 'datetime'}, Name, Value) ->
+validate(Rule = {type, 'datetime'}, Name, Value, _SchemaUri) ->
     case is_binary(Value) of
         true ->
             case validate_datetime(Value) of
@@ -154,7 +154,7 @@ validate(Rule = {type, 'datetime'}, Name, Value) ->
         false -> validation_error(Rule, Name)
     end;
 
-validate(Rule = {enum, Values}, Name, Value) ->
+validate(Rule = {enum, Values}, Name, Value, _SchemaUri) ->
     try
         FormattedValue = erlang:binary_to_existing_atom(Value, utf8),
         case lists:member(FormattedValue, Values) of
@@ -166,7 +166,7 @@ validate(Rule = {enum, Values}, Name, Value) ->
             validation_error(Rule, Name)
     end;
 
-validate(Rule = {max, Max, Type}, Name, Value) ->
+validate(Rule = {max, Max, Type}, Name, Value, _SchemaUri) ->
     Result = case Value of
         _ when Value < Max andalso Type =:= exclusive ->
             true;
@@ -180,7 +180,7 @@ validate(Rule = {max, Max, Type}, Name, Value) ->
         false -> validation_error(Rule, Name)
     end;
 
-validate(Rule = {min, Min, Type}, Name, Value) ->
+validate(Rule = {min, Min, Type}, Name, Value, _SchemaUri) ->
     Result = case Value of
         _ when Value > Min andalso Type =:= exclusive ->
             true;
@@ -194,36 +194,36 @@ validate(Rule = {min, Min, Type}, Name, Value) ->
         false -> validation_error(Rule, Name)
     end;
 
-validate(Rule = {max_length, MaxLength}, Name, Value) ->
+validate(Rule = {max_length, MaxLength}, Name, Value, _SchemaUri) ->
     case size(Value) =< MaxLength of
         true -> ok;
         false -> validation_error(Rule, Name)
     end;
 
-validate(Rule = {min_length, MinLength}, Name, Value) ->
+validate(Rule = {min_length, MinLength}, Name, Value, _SchemaUri) ->
     case size(Value) >= MinLength of
         true -> ok;
         false -> validation_error(Rule, Name)
     end;
 
-validate(Rule = {pattern, Pattern}, Name, Value) ->
+validate(Rule = {pattern, Pattern}, Name, Value, _SchemaUri) ->
     {ok, MP} = re:compile(Pattern),
     case re:run(Value, MP) of
         {match, _} -> ok;
         _ -> validation_error(Rule, Name)
     end;
 
-validate(Rule = {list, Format, Ruleset}, Name, Value) ->
+validate(Rule = {list, Format, Ruleset}, Name, Value, SchemaUri) ->
     try
         Values = parse_collection_value(Format, Value),
-        {ok, [validate_param(Ruleset, Name, V) || V <- Values]}
+        {ok, [validate_param(Ruleset, Name, V, SchemaUri) || V <- Values]}
     catch
         error:badarg ->
             validation_error(Rule, Name)
     end;
 
-validate(Rule = schema, Name, Value) ->
-    case jesse:validate_ref(make_schema_ref(Name), Body, validator_opts()) of
+validate(Rule = schema, Name, Value, SchemaUri) ->
+    case jesse:validate_ref(make_schema_ref(Name, SchemaUri), Body, validator_opts()) of
         {ok, _} ->
             ok;
         {error, [{schema_invalid, _, Error} | _]} ->
@@ -249,7 +249,7 @@ validate(Rule = schema, Name, Value) ->
             validation_error(Rule, Name, Info);
     end;
 
-validate(Rule, Name, _Value) ->
+validate(Rule, Name, _Value, _SchemaUri) ->
     error_logger:info_msg("Can't validate ~p with ~p", [Name, Rule]),
     error({unknown_validation_rule, Rule}).
 
@@ -284,9 +284,9 @@ prepare_body(Body) ->
         _ -> jsx:decode(Body, [return_maps])
     end.
 
-make_schema_ref(Name) ->
+make_schema_ref(Name, SchemaUri) ->
     {{packageName}}_jesse_validator_swagger_2_0:make_schema_ref(
-        ?SCHEMA_KEY,
+        SchemaUri,
         {{packageName}}_client_api_utils:to_list(Name),
     ).
 
@@ -296,10 +296,10 @@ validator_opts() ->
 binary_to_lower(V) when is_binary(V) ->
     list_to_binary(string:to_lower({{packageName}}_client_api_utils:to_list(V))).
 
-validate_param(Rules, Name, Value) ->
+validate_param(Rules, Name, Value, SchemaUri) ->
     lists:foldl(
         fun(Rule, Acc) ->
-            case validate(Rule, Name, Acc) of
+            case validate(Rule, Name, Acc, SchemaUri) of
                 ok -> Acc;
                 {ok, Prepared} -> Prepared
             end

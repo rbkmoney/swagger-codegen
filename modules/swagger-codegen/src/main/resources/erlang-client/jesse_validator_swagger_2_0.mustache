@@ -59,9 +59,9 @@ validate_child_schema(Value, SchemaName, State) ->
     Schema = make_ref_schema(<<"#/definitions/", SchemaName/binary>>),
     jesse_schema_validator:validate_with_state(Schema, Value, State).
 
-validate_ref(Value, JsonSchema = [{_, Ref} | _], State) ->
-    State1         = add_ref_to_state(State, Ref),
-    {_, _, State2} = jesse_validator_draft4:check_value(Value, JsonSchema, State1),
+validate_ref(Value, Attr = {_, Ref}, State) ->
+    State1 = add_ref_to_state(State, Ref),
+    State2 = jesse_validator_draft4:check_value(Value, Attr, State1),
     remove_last_ref_from_state(State2).
 
 add_ref_to_state(State, Ref) ->
@@ -215,7 +215,7 @@ make_ref_schema(Ref) ->
          ]
        }
      }}">>).
--define(SCHEMA_KEY, "pet.schema").
+-define(SCHEMA_KEY, "http://example.com/pet").
 -define(PET_SCHEMA, "Pet").
 
 init_jesse() ->

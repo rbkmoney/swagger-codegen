@@ -12,13 +12,16 @@
 
 -type id() :: atom().
 -type params() :: #{
-    ip                  => inet:ip_address(),
-    port                => inet:port_number(),
-    net_opts            => [],
-    validator_pool_opts => {{packageName}}_schema_validator:pool_options()
+    ip                   := inet:ip_address(),
+    port                 := inet:port_number(),
+    net_opts             := [],
+    validator_schema_uri := swagger_validator:schema_uri(),
+    validator_pool_opts  => swagger_validator:pool_options(),
+    logic_handler        => module(),
+    cowboy_extra_opts    => list()
 }.
 
--export_type([id/0]).
+-define(VALIDATOR_PARAMS, [validator_schema_uri, validator_pool_opts]).
 
 -spec child_spec(id(), params()) -> supervisor:child_spec().
 
@@ -44,7 +47,7 @@ init({ID, Params}) ->
     }}.
 
 child_spec(validator, ID, Params) ->
-    {{packageName}}_schema_validator:child_spec(ID, maps:get(validator_pool_opts, Params, #{}));
+    {{packageName}}_schema_validator:child_spec(ID, maps:with(?VALIDATOR_PARAMS, Params));
 
 child_spec(server, ID, #{
     ip            := IP ,
