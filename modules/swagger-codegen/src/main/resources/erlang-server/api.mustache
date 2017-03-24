@@ -1,7 +1,5 @@
 -module({{packageName}}_api).
 
--export([request_params/1]).
--export([request_param_info/2]).
 -export([populate_request/3]).
 -export([validate_response/4]).
 
@@ -35,52 +33,38 @@ request_params('{{operationId}}') ->
 request_params(_) ->
     error(unknown_operation).
 
--spec request_param_info(OperationID :: operation_id(), Name :: request_param()) -> #{
-    source => qs_val | binding | header | body,
-    rules => [{{packageName}}_validation:rule()]
-}.
-
-{{#apiInfo}}{{#apis}}
-{{#operations}}{{#operation}}{{#allParams}}
-request_param_info('{{operationId}}', {{^isBodyParam}}'{{baseName}}'{{/isBodyParam}}{{#isBodyParam}}'{{dataType}}'{{/isBodyParam}}) ->
-    #{
-        source => {{#isQueryParam}}qs_val{{/isQueryParam}} {{#isPathParam}}binding{{/isPathParam}} {{#isHeaderParam}}header{{/isHeaderParam}}{{#isBodyParam}}body{{/isBodyParam}},
-        rules => {{#isListContainer}}[{list, '{{collectionFormat}}', {{#items}}[{{>api.param_info}}]{{/items}}}, {{>api.param_info}}]{{/isListContainer}}{{^isListContainer}}[{{>api.param_info}}]{{/isListContainer}}
-    };
-{{/allParams}}{{/operation}}{{/operations}}{{/apis}}{{/apiInfo}}
-request_param_info(OperationID, Name) ->
-    error({unknown_param, OperationID, Name}).
-
 -spec populate_request(
     OperationID :: operation_id(),
     Req :: cowboy_req:req(),
-    Validator :: {{packageName}}_validator:validator()
+    {{packageName}}_server:id()
 ) ->
     {ok, Model :: map(), Req :: cowboy_req:req()} |
     {error, Reason :: unavailable | binary(), Req :: cowboy_req:req()}.
 
-populate_request(OperationID, Req, Validator) ->
+populate_request(OperationID, Req, ID) ->
     Params = request_params(OperationID),
-    populate_request_params(OperationID, Params, Req, Validator, #{}).
+    populate_request_params(OperationID, Params, Req, #{}, ID).
 
-populate_request_params(_, [], Req, _, Model) ->
+populate_request_params(_, [], Req, Model, _) ->
     {ok, Model, Req};
 
-populate_request_params(OperationID, [FieldParams | T], Req0, Validator, Model) ->
-    case populate_request_param(OperationID, FieldParams, Req0, Validator) of
+populate_request_params(OperationID, [FieldParams | T], Req0, Model, ID) ->
+    case populate_request_param(OperationID, FieldParams, Req0, ID) of
         {ok, K, V, Req} ->
-            populate_request_params(OperationID, T, Req, Validator, maps:put(K, V, Model));
+            populate_request_params(OperationID, T, Req, maps:put(K, V, Model), ID);
         Error ->
             Error
     end.
 
-populate_request_param(OperationID, Name, Req0, Validator) ->
-    #{rules := Rules, source := Source} = request_param_info(OperationID, Name),
+populate_request_param(OperationID, Name, Req0, ID) ->
+    #{rules := Rules, source := Source} = {{packageName}}_validation:request_param_info(OperationID, Name),
     case get_value(Source, Name, Req0) of
         {ok, Value, Req} ->
-            case prepare_param(Rules, Name, Value, Validator) of
+            case {{packageName}}_validation:prepare_param(Rules, Name, Value, ID) of
                 {ok, Result} ->
                     {ok, Name, Result, Req};
+                {error, Error = #{type := _}}  ->
+                    {error, error_message(Name, Error), Req};
                 {error, Reason} ->
                     {error, Reason, Req}
             end;
@@ -88,80 +72,15 @@ populate_request_param(OperationID, Name, Req0, Validator) ->
             E
     end.
 
-
 -spec validate_response(
     OperationID :: operation_id(),
     Code :: 200..599,
-    Body :: jesse:json_term(),
-    Validator :: {{packageName}}_validator:validator()
+    Body :: jesse:json_term() | undefined,
+    {{packageName}}_server:id()
 ) -> ok | no_return().
-{{#apiInfo}}{{#apis}}
-{{#operations}}{{#operation}}
-{{#responses}}
-validate_response('{{operationId}}', {{code}}, Body, Validator) ->
-    validate_response_body('{{dataType}}', '{{baseType}}', Body, Validator);
-{{/responses}}
-{{/operation}}{{/operations}}{{/apis}}{{/apiInfo}}
 
-validate_response(_OperationID, _Code, _Body, _Validator) ->
-    ok.
-
-validate_response_body('list', ReturnBaseType, Body, Validator) ->
-    [
-        validate(schema, ReturnBaseType, Item, Validator)
-    || Item <- Body];
-
-validate_response_body(_, ReturnBaseType, Body, Validator) ->
-    validate(schema, ReturnBaseType, Body, Validator).
-
-validate(Rule = {list, Format, Ruleset}, Name, Value, Validator) ->
-    try
-        Values = parse_collection_value(Format, Value),
-        {ok, [validate_param(Ruleset, Name, V, Validator) || V <- Values]}
-    catch
-        error:badarg ->
-            report_validation_error(Rule, Name)
-    end;
-
-validate(Rule = schema, Name, Value, Validator) ->
-    Defname = list_to_binary("#/definitions/" ++ {{packageName}}_utils:to_list(Name)),
-    case Validator(Value, Defname) of
-        ok ->
-            ok;
-        {error, Reasons} when is_list(Reasons) ->
-            Errors = [map_error(Rule, R) || R <- Reasons],
-            report_validation_errors(Name, Errors)
-    end;
-
-validate(Rule, Name, Value, _Validator) ->
-    case {{packageName}}_param_validator:validate(Rule, Value) of
-        ok ->
-            ok;
-        Ok = {ok, _} ->
-            Ok;
-        error ->
-            report_validation_error(Rule, Name)
-    end.
-
--spec report_validation_error(Rule :: any(), Name :: request_param()) -> no_return().
-
-report_validation_error(Rule, Name) ->
-    Errors = [map_error(Rule)],
-    report_validation_errors(Name, Errors).
-
--spec report_validation_errors(
-    Name :: request_param(),
-    [{{packageName}}_validation:validation_error()]
-) -> no_return().
-
-report_validation_errors(Name, Errors) ->
-    throw({wrong_param, Name, Errors}).
-
--spec get_value(
-    body | qs_val | header | binding,
-    request_param(),
-    cowboy_req:req()
-) -> {ok, Value :: term(), cowboy_req:req()} | {error, Reason :: term(), cowboy_req:req()}.
+validate_response(OperationID, Code, Body, ID) ->
+    ok = {{packageName}}_validation:validate_response(OperationID, Code, Body, ID).
 
 get_value(body, _Name, Req0) ->
     {ok, Body, Req} = cowboy_req:body(Req0),
@@ -195,77 +114,11 @@ prepare_body(Body) ->
             {error, <<"Invalid json">>}
     end.
 
-prepare_param(Rules, Name, Value, Validator) ->
-    try
-        {ok, validate_param(Rules, Name, Value, Validator)}
-    catch
-        throw:{wrong_param, Name, Errors} ->
-            {error, error_message(Name, Errors)};
-        throw:Reason ->
-            {error, Reason}
-    end.
+-spec error_message(request_param(), {{packageName}}_validation:validation_error()) -> binary().
 
-validate_param(Rules, Name, Value, Validator) ->
-    lists:foldl(
-        fun(Rule, Acc) ->
-            case validate(Rule, Name, Acc, Validator) of
-                ok -> Acc;
-                {ok, Prepared} -> Prepared
-            end
-        end,
-        Value,
-        Rules
-    ).
-
--spec error_message(request_param(), [term()]) -> binary().
-
-error_message(Name, Errors) ->
-    jsx:encode(lists:map(
-        fun(Error = #{type := Type}) ->
-            #{
-                <<"name">> => {{packageName}}_utils:to_binary(Name),
-                <<"errorType">> => {{packageName}}_utils:to_binary(Type),
-                <<"description">> => maps:get(description, Error, <<"">>)
-            }
-        end,
-        Errors
-    )).
-
-
--spec parse_collection_value(Format :: 'csv' | 'ssv' | 'tsv' | 'pipes', binary()) -> Values :: [binary()].
-
-parse_collection_value(Format, Collection) ->
-    binary:split(Collection, get_split_pattern(Format), [global]).
-
-get_split_pattern('csv') ->
-    <<",">>;
-get_split_pattern('ssv') ->
-    <<" ">>;
-get_split_pattern('tsv') ->
-    <<"\t">>;
-get_split_pattern('pipes') ->
-    <<"|">>.
-
-map_error(Rule) ->
-    map_error(Rule, undefined).
-
-map_error(Rule, Description) ->
-    Error = #{
-        type => map_violated_rule(Rule)
-    },
-    case Description of
-        undefined -> Error;
-        _ -> Error#{description => Description}
-    end.
-
--spec map_violated_rule(term()) -> {{packageName}}_validation:error_type().
-
-map_violated_rule({type, _Type}) ->  wrong_type;
-map_violated_rule({enum, _}) ->  not_in_range;
-map_violated_rule({max, _, _}) ->  wrong_size;
-map_violated_rule({min, _, _}) ->  wrong_size;
-map_violated_rule({max_length, _}) ->  wrong_length;
-map_violated_rule({min_length, _}) ->  wrong_length;
-map_violated_rule({pattern, _}) ->  no_match;
-map_violated_rule(schema) ->  schema_violated;
-map_violated_rule({required, _}) ->  not_found.
+error_message(Name, Error = #{type := Type}) ->
+    jsx:encode(#{
+        <<"name">> => {{packageName}}_utils:to_binary(Name),
+        <<"errorType">> => {{packageName}}_utils:to_binary(Type),
+        <<"description">> => maps:get(description, Error, <<"">>)
+    }).

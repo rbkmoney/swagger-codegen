@@ -8,11 +8,11 @@
     {{/isApiKey}}
 {{/authMethods}}
 
--type handler_response() ::{
+-type handler_response() :: {ok | error, {
     Status :: cowboy:http_status(),
     Headers :: cowboy:http_headers(),
-    Body :: map()
-}.
+    Body :: map() | undefined
+}}.
 
 -export_type([handler_response/0]).
 
@@ -27,7 +27,11 @@
 {{/authMethods}}
 
 
--callback handle_request(OperationID :: {{packageName}}_api:operation_id(), Request :: any(), Context :: {{packageName}}_api:request_context()) ->
+-callback handle_request(
+    OperationID :: {{packageName}}_api:operation_id(),
+    Request :: any(),
+    Context :: {{packageName}}_api:request_context()
+) ->
     handler_response().
 
 -spec handle_request(

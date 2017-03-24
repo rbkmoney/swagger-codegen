@@ -5,7 +5,7 @@
 -export([child_spec/2]).
 -export([get_validator/1]).
 
--export([start_link/0]).
+-export([start_link/1]).
 -export([validate/3]).
 
 -export([init/1]).
@@ -29,7 +29,7 @@
 -type pool_time_interval() :: {non_neg_integer(), min | sec | ms}.
 -type pool_options() :: #{
     name                 => term(),
-    start_mfa            => {atom(), atom(), start_args()},
+    start_mfa            => {atom(), atom(), [term()]},
     max_count            => non_neg_integer(),
     init_count           => non_neg_integer(),
     cull_interval        => pool_time_interval(),
@@ -92,11 +92,11 @@ get_validator(ID) ->
         validate_(PoolName, Json, Defname)
     end.
 
--spec start_link() ->
+-spec start_link(start_args()) ->
     {ok, pid()}.
 
-start_link() ->
-    gen_server:start_link(?MODULE, [], []).
+start_link(Options) ->
+    gen_server:start_link(?MODULE, Options, []).
 
 %%
 
@@ -111,7 +111,7 @@ do_validate(Pid, Json, Defname) ->
 -type state() ::
     jesse_state:state().
 
--spec init(_) ->
+-spec init(start_args()) ->
     {ok, state()}.
 
 init(Options) ->

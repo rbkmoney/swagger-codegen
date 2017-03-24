@@ -225,7 +225,7 @@ validate_int32_test() ->
 
 validate_float_test() ->
     ?assertEqual({ok, 1.9}, validate({type, 'float'}, <<"1.9">>)),
-    ?assertEqual({ok, 3}, validate({type, 'float'}, <<"3">>)),
+    ?assertEqual({ok, 3.0}, validate({type, 'float'}, <<"3">>)),
     ?assertEqual(error, validate({type, 'float'}, <<"c">>)).
 
 validate_binary_test() ->

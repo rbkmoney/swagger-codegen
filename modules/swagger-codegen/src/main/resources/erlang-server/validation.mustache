@@ -1,8 +1,8 @@
 -module({{packageName}}_validation).
 
 -type rule() ::
-	schema |
-	param_rule().
+    schema |
+    param_rule().
 
 -type param_rule() ::
     {type, 'binary'} |
@@ -35,8 +35,188 @@
     schema_violated |
     wrong_type.
 
+-type operation_id() :: atom().
 
 -export_type([rule/0]).
 -export_type([param_rule/0]).
 -export_type([validation_error/0]).
 -export_type([error_type/0]).
+
+-export([request_param_info/2]).
+-export([prepare_param/4]).
+-export([validate_response/4]).
+
+-define(catch_error(Block),
+    try
+        {ok, Block}
+    catch
+        throw:{wrong_param, _Name, Errors} ->
+            {error, Errors};
+        throw:Reason ->
+            {error, Reason}
+    end
+).
+
+-spec request_param_info(
+    OperationID :: operation_id(),
+    Name :: atom()
+) -> #{
+    source => qs_val | binding | header | body,
+    rules => [rule()]
+}.
+
+{{#apiInfo}}{{#apis}}
+{{#operations}}{{#operation}}{{#allParams}}
+request_param_info('{{operationId}}', {{^isBodyParam}}'{{baseName}}'{{/isBodyParam}}{{#isBodyParam}}'{{dataType}}'{{/isBodyParam}}) ->
+    #{
+        source => {{#isQueryParam}}qs_val{{/isQueryParam}} {{#isPathParam}}binding{{/isPathParam}} {{#isHeaderParam}}header{{/isHeaderParam}}{{#isBodyParam}}body{{/isBodyParam}},
+        rules => {{#isListContainer}}[{list, '{{collectionFormat}}', {{#items}}[{{>api.param_info}}]{{/items}}}, {{>api.param_info}}]{{/isListContainer}}{{^isListContainer}}[{{>api.param_info}}]{{/isListContainer}}
+    };
+{{/allParams}}{{/operation}}{{/operations}}{{/apis}}{{/apiInfo}}
+request_param_info(OperationID, Name) ->
+    error({unknown_param, OperationID, Name}).
+
+-spec prepare_param([rule()], Name :: atom(), Value :: term(), {{packageName}}_server:id()) ->
+    {ok, term()} | {error, validation_error() | unavailable}.
+
+prepare_param(Rules, Name, Value, ID) ->
+    ?catch_error(validate_param(Rules, Name, Value, ID)).
+
+-spec validate_response(
+    operation_id(),
+    Code :: term(),
+    Body :: term(),
+    {{packageName}}_server:id()
+) -> ok | {error, validation_error() | unavailable}.
+{{#apiInfo}}{{#apis}}
+{{#operations}}{{#operation}}
+{{#responses}}
+validate_response('{{operationId}}', {{code}}, Body, {{^dataType}}_{{/dataType}}ID) ->
+    {{#dataType}}validate_response_body('{{dataType}}', '{{baseType}}', Body, ID);
+    {{/dataType}}{{^dataType}}validate_empty_body(Body);{{/dataType}}
+{{/responses}}
+{{/operation}}{{/operations}}{{/apis}}{{/apiInfo}}
+validate_response(OperationID, Code, _Body, _ID) ->
+    error({unknown_operation, OperationID, Code}).
+
+validate_response_body(DataType, BaseType, Body, ID) ->
+    Result = case DataType of
+        'list' ->
+            ?catch_error(
+                [validate(schema, BaseType, Item, ID) || Item <- Body]
+            );
+        _ ->
+            ?catch_error(validate(schema, BaseType, Body, ID))
+    end,
+    case Result of
+        E = {error, _} -> E;
+        _ -> ok
+    end.
+
+validate_empty_body(undefined) ->
+    ok;
+
+validate_empty_body(_) ->
+    #{
+        type => schema_violated,
+        description => <<"Must be empty">>
+    }.
+
+validate(Rule = {'list', Format, Ruleset}, Name, Value, ID) ->
+    try
+        Values = parse_collection_value(Format, Value),
+        {ok, [validate_param(Ruleset, Name, V, ID) || V <- Values]}
+    catch
+        error:badarg ->
+            report_validation_error(Rule, Name)
+    end;
+
+validate(Rule = schema, Name, Value, ID) ->
+    Defname = list_to_binary("#/definitions/" ++ {{packageName}}_utils:to_list(Name)),
+    Validator = {{packageName}}_schema_validator:get_validator(ID),
+    case Validator(Value, Defname) of
+        ok ->
+            ok;
+        {error, Reasons} when is_list(Reasons) ->
+            Errors = [map_error(Rule, R) || R <- Reasons],
+            report_validation_errors(Name, Errors);
+        {error, Reason} ->
+            throw(Reason)
+    end;
+
+validate(Rule, Name, Value, _ID) ->
+    case {{packageName}}_param_validator:validate(Rule, Value) of
+        ok ->
+            ok;
+        Ok = {ok, _} ->
+            Ok;
+        error ->
+            report_validation_error(Rule, Name)
+    end.
+
+-spec report_validation_error(Rule :: any(), Name :: atom()) -> no_return().
+
+report_validation_error(Rule, Name) ->
+    Errors = [map_error(Rule)],
+    report_validation_errors(Name, Errors).
+
+-spec report_validation_errors(
+    Name :: atom(),
+    [{{packageName}}_validation:validation_error()]
+) -> no_return().
+
+report_validation_errors(Name, Errors) ->
+    throw({wrong_param, Name, Errors}).
+
+validate_param(Rules, Name, Value, ID) ->
+    lists:foldl(
+        fun(Rule, Acc) ->
+            case validate(Rule, Name, Acc, ID) of
+                ok -> Acc;
+                {ok, Prepared} -> Prepared
+            end
+        end,
+        Value,
+        Rules
+    ).
+
+map_error(Rule) ->
+    map_error(Rule, undefined).
+
+map_error(Rule, Description) ->
+    Error = #{
+        type => map_violated_rule(Rule)
+    },
+    case Description of
+        undefined -> Error;
+        _ -> Error#{description => Description}
+    end.
+
+-spec map_violated_rule(rule()) -> error_type().
+
+map_violated_rule({type, _Type}) ->  wrong_type;
+map_violated_rule({enum, _}) ->  not_in_range;
+map_violated_rule({max, _, _}) ->  wrong_size;
+map_violated_rule({min, _, _}) ->  wrong_size;
+map_violated_rule({max_length, _}) ->  wrong_length;
+map_violated_rule({min_length, _}) ->  wrong_length;
+map_violated_rule({pattern, _}) ->  no_match;
+map_violated_rule(schema) ->  schema_violated;
+map_violated_rule({required, _}) ->  not_found.
+
+-spec parse_collection_value(
+    Format :: 'csv' | 'ssv' | 'tsv' | 'pipes',
+    binary()
+) -> Values :: [binary()].
+
+parse_collection_value(Format, Collection) ->
+    binary:split(Collection, get_split_pattern(Format), [global]).
+
+get_split_pattern('csv') ->
+    <<",">>;
+get_split_pattern('ssv') ->
+    <<" ">>;
+get_split_pattern('tsv') ->
+    <<"\t">>;
+get_split_pattern('pipes') ->
+    <<"|">>.
