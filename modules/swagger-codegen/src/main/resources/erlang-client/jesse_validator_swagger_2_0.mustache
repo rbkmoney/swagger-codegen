@@ -26,26 +26,24 @@ options() ->
 make_schema_ref(RefBase, Element) ->
     RefBase ++ "#/definitions/" ++ Element.
 
--spec check_value(Value, JsonSchema, State) ->
-    {Value, JsonSchema, State} | no_return()
+-spec check_value(Value, Attr, State) ->
+    State | no_return()
 when
-    Value      :: any(),
-    JsonSchema :: jesse:json_term(),
-    State      :: jesse_state:state().
-check_value(Value, [{?DISCRIMINATOR, DiscrField} | Attrs], State) ->
-    NewState = case jesse_lib:is_json_object(Value) of
+    Value :: any(),
+    Attr  :: {binary(), jesse:json_term()},
+    State :: jesse_state:state().
+check_value(Value, {?DISCRIMINATOR, DiscrField}, State) ->
+    case jesse_lib:is_json_object(Value) of
         true  -> validate_discriminator(Value, DiscrField, State);
         false -> State
-    end,
-    {Value, Attrs, NewState};
-check_value(Value, JsonSchema = [{?REF, Ref} | Attrs], State) ->
-    NewState = case is_recursive_ref(Ref, State) of
+    end;
+check_value(Value, Attr = {?REF, Ref}, State) ->
+    case is_recursive_ref(Ref, State) of
         true -> State;
-        false -> validate_ref(Value, JsonSchema, State)
-    end,
-    {Value, Attrs, NewState};
-check_value(Value, JsonSchema, State) ->
-    jesse_validator_draft4:check_value(Value, JsonSchema, State).
+        false -> validate_ref(Value, Attr, State)
+    end;
+check_value(Value, Attr, State) ->
+    jesse_validator_draft4:check_value(Value, Attr, State).
 
 %%
 
