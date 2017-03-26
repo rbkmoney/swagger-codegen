@@ -9,7 +9,7 @@
     binding     := any(),
     body        := any(),
     qs_val      := any(),
-    schema_uri  := {{packageName}}_client_api_validation:schema_uri().
+    schema_uri  := {{packageName}}_client_api_validation:schema_uri()
 }.
 -type url()    :: string().
 -type method() :: atom().
@@ -50,7 +50,7 @@ populate_request(OperationID, RequestParams) ->
     Params = {{packageName}}_client_api_validation:request_params(OperationID),
     populate_request_params(OperationID, Params, RequestParams).
 
-populate_request_params(_, [], RequestParams, _) ->
+populate_request_params(_, [], RequestParams) ->
     {ok, RequestParams};
 populate_request_params(OperationID, [FieldParams | T], RequestParams) ->
     case populate_request_param(OperationID, FieldParams, RequestParams) of

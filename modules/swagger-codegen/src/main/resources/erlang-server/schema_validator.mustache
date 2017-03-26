@@ -116,6 +116,12 @@ prepare_validator(SchemaUri) ->
     Schema = get_swagger_schema(),
     jesse:add_schema(SchemaUri, Schema, [{parser_fun, fun jsx:decode/1}]).
 
+%% get_swagger_schema() ->
+%%     %% Read swagger.json in compile time (via parse transform)
+%%     %% since swagger schema is essentially a part of the code.
+%%     {ok, Schema} = ct_expand:term(file:read_file(code:priv_dir({{packageName}}) ++ "/swagger.json")),
+%%     Schema.
+
 get_swagger_schema() ->
     {ok, AppName} = application:get_application(?MODULE),
     Filepath = filename:join({{packageName}}_utils:priv_dir(AppName), "swagger.json"),

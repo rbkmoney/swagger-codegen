@@ -1,0 +1,17 @@
+-module({{packageName}}_client).
+
+-export([init/1]).
+
+%%%
+-export_type([params/0]).
+
+-type params() :: #{
+    schema_uri := {{packageName}}_client_api_validation:schema_uri(),
+    schema     => {{packageName}}_client_api_validation:raw_schema()
+}.
+
+-spec init(params()) -> ok.
+init(Params) ->
+    SchemaUri = maps:get(schema_uri, Params),
+    Schema    = maps:get(schema,     Params, undefined),
+    {{packageName}}_client_api_validation:load_schema(SchemaUri, Schema).

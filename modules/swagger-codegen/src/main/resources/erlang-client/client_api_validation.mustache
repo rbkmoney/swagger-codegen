@@ -2,11 +2,12 @@
 
 -export([request_params/1]).
 -export([request_param_info/2]).
--export([load_schema/1]).
+-export([load_schema/2]).
 -export([validate/4]).
 -export([prepare_body/1]).
 
 -type schema_uri()    :: string().
+-type raw_schema()    :: binary().
 -type operation_id()  :: atom().
 -type request_param() :: atom().
 
@@ -18,10 +19,9 @@
 -export_type([operation_id/0]).
 -export_type([client_peer/0]).
 -export_type([schema_uri/0]).
+-export_type([raw_schema/0]).
 
 -spec request_params(OperationID :: operation_id()) -> [Param :: request_param()].
-
-
 {{#apiInfo}}{{#apis}}
 {{#operations}}{{#operation}}
 request_params('{{operationId}}') ->
@@ -69,16 +69,25 @@ request_param_info(OperationID, Name) ->
     error({unknown_param, OperationID, Name}).
 
 %%%
--spec load_schema(schema_uri()) -> ok.
-load_schema(SchemaUri) ->
-    jesse:add_schema(SchemaUri, get_schema(), [{parser_fun, fun jsx:decode/1}]).
+-spec load_schema(schema_uri(), raw_schema() | undefined) -> ok.
+load_schema(SchemaUri, undefined) ->
+    load_schema(SchemaUri, get_schema());
+load_schema(SchemaUri, Schema) ->
+    ok = jesse:add_schema(SchemaUri, Schema, [{parser_fun, fun jsx:decode/1}]).
 
 get_schema() ->
-    {ok, Schema} = file:read_file(get_swagger_path()).
+    {ok, Schema} = file:read_file(get_swagger_path()),
+    Schema.
 
 get_swagger_path() ->
     {ok, AppName} = application:get_application(?MODULE),
     filename:join({{packageName}}_client_api_utils:priv_dir(AppName), "swagger.json").
+
+%% get_swagger_schema() ->
+%%     %% Read swagger.json in compile time (via parse transform)
+%%     %% since swagger schema is essentially a part of the code.
+%%     {ok, Schema} = ct_expand:term(file:read_file(code:priv_dir({{packageName}}) ++ "/swagger.json")),
+%%     Schema.
 
 -spec validate(Rule :: rule(), Name :: term(), Value :: term(), schema_uri()) -> ok | {ok, term()} | no_return().
 validate(Rule = {required, true}, Name, Value, _SchemaUri) ->
@@ -223,7 +232,7 @@ validate(Rule = {list, Format, Ruleset}, Name, Value, SchemaUri) ->
     end;
 
 validate(Rule = schema, Name, Value, SchemaUri) ->
-    case jesse:validate_ref(make_schema_ref(Name, SchemaUri), Body, validator_opts()) of
+    case jesse:validate_ref(make_schema_ref(Name, SchemaUri), Value, validator_opts()) of
         {ok, _} ->
             ok;
         {error, [{schema_invalid, _, Error} | _]} ->
@@ -246,7 +255,7 @@ validate(Rule = schema, Name, Value, SchemaUri) ->
                 error => Error,
                 key => Key
             },
-            validation_error(Rule, Name, Info);
+            validation_error(Rule, Name, Info)
     end;
 
 validate(Rule, Name, _Value, _SchemaUri) ->
@@ -287,7 +296,7 @@ prepare_body(Body) ->
 make_schema_ref(Name, SchemaUri) ->
     {{packageName}}_jesse_validator_swagger_2_0:make_schema_ref(
         SchemaUri,
-        {{packageName}}_client_api_utils:to_list(Name),
+        {{packageName}}_client_api_utils:to_list(Name)
     ).
 
 validator_opts() ->
