@@ -115,15 +115,28 @@ validate(Rule = {type, 'boolean'}, Name, Value, _ValidatorState) ->
             validation_error(Rule, Name)
     end;
 
-validate(Rule = {type, 'date'}, Name, Value, _ValidatorState) ->
+
+validate(Rule = {type, 'date'}, Name, Value, _Validator) ->
     case is_binary(Value) of
-        true -> ok;
+        true ->
+            case validate_date(Value) of
+                {ok, _} ->
+                    ok;
+                {error, _} ->
+                    validation_error(Rule, Name)
+            end;
         false -> validation_error(Rule, Name)
     end;
 
-validate(Rule = {type, 'datetime'}, Name, Value, _ValidatorState) ->
+validate(Rule = {type, 'datetime'}, Name, Value, _Validator) ->
     case is_binary(Value) of
-        true -> ok;
+        true ->
+            case validate_datetime(Value) of
+                {ok, _} ->
+                    ok;
+                {error, _} ->
+                    validation_error(Rule, Name)
+            end;
         false -> validation_error(Rule, Name)
     end;
 
@@ -273,3 +286,9 @@ validate_param(Rules, Name, Value, ValidatorState) ->
         Value,
         Rules
     ).
+
+validate_date(Value) when is_binary(Value) ->
+    validate_datetime(<<Value/binary, "T00:00:00Z">>).
+
+validate_datetime(Value) when is_binary(Value) ->
+    rfc3339:parse(Value).

@@ -80,25 +80,23 @@ public class ErlangServerCodegen extends DefaultCodegen implements CodegenConfig
         typeMapping.clear();
         typeMapping.put("enum", "binary");
         typeMapping.put("date", "date");
-        typeMapping.put("datetime", "datetime");
+        typeMapping.put("DateTime", "datetime");
         typeMapping.put("boolean", "boolean");
         typeMapping.put("string", "binary");
-        typeMapping.put("integer", "integer");
-        typeMapping.put("int", "integer");
-        typeMapping.put("float", "integer");
-        typeMapping.put("long", "integer");
+        typeMapping.put("char", "binary");
+        typeMapping.put("integer", "int32");
+        typeMapping.put("float", "float");
+        typeMapping.put("long", "int64");
         typeMapping.put("double", "float");
         typeMapping.put("array", "list");
         typeMapping.put("map", "map");
-        typeMapping.put("number", "integer");
-        typeMapping.put("bigdecimal", "float");
+        typeMapping.put("number", "float");
         typeMapping.put("List", "list");
         typeMapping.put("object", "object");
         typeMapping.put("file", "file");
         typeMapping.put("binary", "binary");
-        typeMapping.put("bytearray", "binary");
-        typeMapping.put("byte", "binary");
-        typeMapping.put("uuid", "binary");
+        typeMapping.put("ByteArray", "byte");
+        typeMapping.put("UUID", "binary");
         typeMapping.put("password", "binary");
 
         cliOptions.clear();
@@ -125,7 +123,9 @@ public class ErlangServerCodegen extends DefaultCodegen implements CodegenConfig
         supportingFiles.add(new SupportingFile("swagger.mustache", "", toPrivFilePath("swagger", "json")));
         supportingFiles.add(new SupportingFile("default_logic_handler.mustache", "",  toSourceFilePath("default_logic_handler", "erl")));
         supportingFiles.add(new SupportingFile("logic_handler.mustache", "",  toSourceFilePath("logic_handler", "erl")));
-        supportingFiles.add(new SupportingFile("validator.mustache", "",  toSourceFilePath("validator", "erl")));
+        supportingFiles.add(new SupportingFile("validation.mustache", "",  toSourceFilePath("validation", "erl")));
+        supportingFiles.add(new SupportingFile("schema_validator.mustache", "",  toSourceFilePath("schema_validator", "erl")));
+        supportingFiles.add(new SupportingFile("param_validator.mustache", "",  toSourceFilePath("param_validator", "erl")));
         writeOptional(outputFolder, new SupportingFile("README.mustache", "", "README.md"));
     }
 

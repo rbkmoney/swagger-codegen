@@ -22,8 +22,8 @@
 -record(state, {
     operation_id :: {{packageName}}_api:operation_id(),
     logic_handler :: atom(),
-    validator :: {{packageName}}_validator:validator(),
-    context :: {{packageName}}_api:request_context()
+    context :: {{packageName}}_api:request_context(),
+    id :: {{packageName}}_server:id()
 }).
 
 -type state() :: state().
@@ -47,8 +47,8 @@ rest_init(Req0, {ID, Operations, LogicHandler}) ->
     State = #state{
         operation_id = OperationID,
         logic_handler = LogicHandler,
-        validator = {{packageName}}_validator:get_validator(ID),
-        context = #{}
+        context = #{},
+        id = ID
     },
 
     {ok, Req1, State}.
@@ -259,7 +259,7 @@ process_response(Response, Req0, State = #state{operation_id = OperationID}) ->
                 "Unable to process request for ~p: ~p",
                 [OperationID, Message]
             ),
-            {ok, Req} = cowboy_req:reply(400, Req0),
+            {ok, Req} = cowboy_req:reply(400, [], Message, Req0),
             {halt, Req, State}
     end.
 
@@ -270,30 +270,41 @@ handle_request_json(
     State = #state{
         operation_id = OperationID,
         logic_handler = LogicHandler,
-        validator = Validator,
-        context = Context
+        context = Context,
+        id = ID
     }
 ) ->
-    case {{packageName}}_api:populate_request(OperationID, Req0, Validator) of
+    case {{packageName}}_api:populate_request(OperationID, Req0, ID) of
         {ok, Populated, Req1} ->
-            {Code, Headers, Body} = {{packageName}}_logic_handler:handle_request(
+            Result =  {{packageName}}_logic_handler:handle_request(
                 LogicHandler,
                 OperationID,
                 Populated,
                 Context
             ),
-            _ = {{packageName}}_api:validate_response(
-                OperationID,
-                Code,
-                Body,
-                Validator
-            ),
-            PreparedBody = jsx:encode(Body),
+            _ = validate_response(OperationID, Result, ID),
+
+            {_, {Code, Headers, Body}} = Result,
+            PreparedBody = case Body of
+                undefined -> <<>>;
+                _ -> jsx:encode(Body)
+            end,
             Response = {ok, {Code, Headers, PreparedBody}},
             process_response(Response, Req1, State);
         {error, Reason, Req1} ->
             process_response({error, Reason}, Req1, State)
     end.
+
+validate_response(_, {error, _}, _) ->
+    ok;
+
+validate_response(OperationID, {ok, {Code, _Headers, Body}}, ID) ->
+    {{packageName}}_api:validate_response(
+        OperationID,
+        Code,
+        Body,
+        ID
+    ).
 
 validate_headers(_, Req) ->
     {true, Req}.

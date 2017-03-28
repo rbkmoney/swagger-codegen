@@ -1,7 +1,5 @@
 -module({{packageName}}_api).
 
--export([request_params/1]).
--export([request_param_info/2]).
 -export([populate_request/3]).
 -export([validate_response/4]).
 %% exported to silence swagger complains
@@ -37,322 +35,94 @@ request_params('{{operationId}}') ->
 request_params(_) ->
     error(unknown_operation).
 
--type rule() ::
-    {type, 'binary'} |
-    {type, 'integer'} |
-    {type, 'float'} |
-    {type, 'binary'} |
-    {type, 'boolean'} |
-    {type, 'date'} |
-    {type, 'datetime'} |
-    {enum, [atom()]} |
-    {max, Max :: number(), Type :: exclusive | inclusive} |
-    {min, Min :: number(), Type :: exclusive | inclusive} |
-    {max_length, MaxLength :: integer()} |
-    {min_length, MaxLength :: integer()} |
-    {pattern, Pattern :: string()} |
-    schema |
-    {required, boolean()}.
-
--spec request_param_info(OperationID :: operation_id(), Name :: request_param()) -> #{
-    source => qs_val | binding | header | body,
-    rules => [rule()]
-}.
-
-{{#apiInfo}}{{#apis}}
-{{#operations}}{{#operation}}{{#allParams}}
-request_param_info('{{operationId}}', {{^isBodyParam}}'{{baseName}}'{{/isBodyParam}}{{#isBodyParam}}'{{dataType}}'{{/isBodyParam}}) ->
-    #{
-        source => {{#isQueryParam}}qs_val{{/isQueryParam}} {{#isPathParam}}binding{{/isPathParam}} {{#isHeaderParam}}header{{/isHeaderParam}}{{#isBodyParam}}body{{/isBodyParam}},
-        rules => {{#isListContainer}}[{list, '{{collectionFormat}}', {{#items}}[{{>api.param_info}}]{{/items}}}, {{>api.param_info}}]{{/isListContainer}}{{^isListContainer}}[{{>api.param_info}}]{{/isListContainer}}
-    };
-{{/allParams}}{{/operation}}{{/operations}}{{/apis}}{{/apiInfo}}
-request_param_info(OperationID, Name) ->
-    error({unknown_param, OperationID, Name}).
-
 -spec populate_request(
     OperationID :: operation_id(),
     Req :: cowboy_req:req(),
-    Validator :: {{packageName}}_validator:validator()
+    {{packageName}}_server:id()
 ) ->
-    {ok, Model :: #{}, Req :: cowboy_req:req()} |
-    {error, Reason :: any(), Req :: cowboy_req:req()}.
+    {ok, Model :: map(), Req :: cowboy_req:req()} |
+    {error, Reason :: unavailable | binary(), Req :: cowboy_req:req()}.
 
-populate_request(OperationID, Req, Validator) ->
+populate_request(OperationID, Req, ID) ->
     Params = request_params(OperationID),
-    populate_request_params(OperationID, Params, Req, Validator, #{}).
+    populate_request_params(OperationID, Params, Req, #{}, ID).
 
-populate_request_params(_, [], Req, _, Model) ->
+populate_request_params(_, [], Req, Model, _) ->
     {ok, Model, Req};
 
-populate_request_params(OperationID, [FieldParams | T], Req0, Validator, Model) ->
-    case populate_request_param(OperationID, FieldParams, Req0, Validator) of
+populate_request_params(OperationID, [FieldParams | T], Req0, Model, ID) ->
+    case populate_request_param(OperationID, FieldParams, Req0, ID) of
         {ok, K, V, Req} ->
-            populate_request_params(OperationID, T, Req, Validator, maps:put(K, V, Model));
+            populate_request_params(OperationID, T, Req, maps:put(K, V, Model), ID);
         Error ->
             Error
     end.
 
-populate_request_param(OperationID, Name, Req0, Validator) ->
-    #{rules := Rules, source := Source} = request_param_info(OperationID, Name),
-    {Value, Req} = get_value(Source, Name, Req0),
-    case prepare_param(Rules, Name, Value, Validator) of
-        {ok, Result} -> {ok, Name, Result, Req};
-        {error, Reason} ->
-            {error, Reason, Req}
+populate_request_param(OperationID, Name, Req0, ID) ->
+    #{rules := Rules, source := Source} = {{packageName}}_validation:request_param_info(OperationID, Name),
+    case get_value(Source, Name, Req0) of
+        {ok, Value, Req} ->
+            case {{packageName}}_validation:prepare_param(Rules, Name, Value, ID) of
+                {ok, Result} ->
+                    {ok, Name, Result, Req};
+                {error, Error = #{type := _}}  ->
+                    {error, error_message(Name, Error), Req};
+                {error, Reason} ->
+                    {error, Reason, Req}
+            end;
+        E = {error, _, _} ->
+            E
     end.
 
 -spec validate_response(
     OperationID :: operation_id(),
     Code :: 200..599,
-    Body :: jesse:json_term(),
-    Validator :: {{packageName}}_validator:validator()
+    Body :: jesse:json_term() | undefined,
+    {{packageName}}_server:id()
 ) -> ok | no_return().
-{{#apiInfo}}{{#apis}}
-{{#operations}}{{#operation}}
-{{#responses}}
-validate_response('{{operationId}}', {{code}}, Body, Validator) ->
-    validate_response_body('{{dataType}}', '{{baseType}}', Body, Validator);
-{{/responses}}
-{{/operation}}{{/operations}}{{/apis}}{{/apiInfo}}
 
-validate_response(_OperationID, _Code, _Body, _Validator) ->
-    ok.
-
-validate_response_body('list', ReturnBaseType, Body, Validator) ->
-    [
-        validate(schema, ReturnBaseType, Item, Validator)
-    || Item <- Body];
-
-validate_response_body(_, ReturnBaseType, Body, Validator) ->
-    validate(schema, ReturnBaseType, Body, Validator).
-
-%%%
-
-validate(Rule = {required, Req}, Name, Value, _Validator) ->
-    case Value of
-        undefined when Req -> validation_error(Rule, Name);
-        _ -> ok
-    end;
-
-validate(_, _Name, undefined, _Validator) ->
-    ok;
-
-validate(Rule = {type, 'integer'}, Name, Value, _Validator) ->
-    try
-        {ok, {{packageName}}_utils:to_int(Value)}
-    catch
-        error:badarg ->
-            validation_error(Rule, Name)
-    end;
-
-validate(Rule = {type, 'float'}, Name, Value, _Validator) ->
-    try
-        {ok, {{packageName}}_utils:to_float(Value)}
-    catch
-        error:badarg ->
-            validation_error(Rule, Name)
-    end;
-
-validate(Rule = {type, 'binary'}, Name, Value, _Validator) ->
-    case is_binary(Value) of
-        true -> ok;
-        false -> validation_error(Rule, Name)
-    end;
-
-validate(_Rule = {type, 'boolean'}, _Name, Value, _Validator) when is_boolean(Value) ->
-    {ok, Value};
-
-validate(Rule = {type, 'boolean'}, Name, Value, _Validator) ->
-    V = binary_to_lower(Value),
-    try
-        case binary_to_existing_atom(V, utf8) of
-            B when is_boolean(B) -> {ok, B};
-            _ -> validation_error(Rule, Name)
-        end
-    catch
-        error:badarg ->
-            validation_error(Rule, Name)
-    end;
-
-validate(Rule = {type, 'date'}, Name, Value, _Validator) ->
-    case is_binary(Value) of
-        true -> ok;
-        false -> validation_error(Rule, Name)
-    end;
-
-validate(Rule = {type, 'datetime'}, Name, Value, _Validator) ->
-    case is_binary(Value) of
-        true -> ok;
-        false -> validation_error(Rule, Name)
-    end;
-
-validate(Rule = {enum, Values}, Name, Value, _Validator) ->
-    try
-        FormattedValue = erlang:binary_to_existing_atom(Value, utf8),
-        case lists:member(FormattedValue, Values) of
-            true -> {ok, FormattedValue};
-            false -> validation_error(Rule, Name)
-        end
-    catch
-        error:badarg ->
-            validation_error(Rule, Name)
-    end;
-
-validate(Rule = {max, Max, Type}, Name, Value, _Validator) ->
-    Result = case Value of
-        _ when Value < Max andalso Type =:= exclusive ->
-            true;
-        _ when Value =< Max andalso Type =:= inclusive  ->
-            true;
-        _ ->
-            false
-    end,
-    case Result of
-        true -> ok;
-        false -> validation_error(Rule, Name)
-    end;
-
-validate(Rule = {min, Min, Type}, Name, Value, _Validator) ->
-    Result = case Value of
-        _ when Value > Min andalso Type =:= exclusive ->
-            true;
-        _ when Value >= Min andalso Type =:= inclusive ->
-            true;
-        _ ->
-            false
-    end,
-    case Result of
-        true -> ok;
-        false -> validation_error(Rule, Name)
-    end;
-
-validate(Rule = {max_length, MaxLength}, Name, Value, _Validator) ->
-    case size(Value) =< MaxLength of
-        true -> ok;
-        false -> validation_error(Rule, Name)
-    end;
-
-validate(Rule = {min_length, MinLength}, Name, Value, _Validator) ->
-    case size(Value) >= MinLength of
-        true -> ok;
-        false -> validation_error(Rule, Name)
-    end;
-
-validate(Rule = {pattern, Pattern}, Name, Value, _Validator) ->
-    {ok, MP} = re:compile(Pattern),
-    case re:run(Value, MP) of
-        {match, _} -> ok;
-        _ -> validation_error(Rule, Name)
-    end;
-
-validate(Rule = {list, Format, Ruleset}, Name, Value, Validator) ->
-    try
-        Values = parse_collection_value(Format, Value),
-        {ok, [validate_param(Ruleset, Name, V, Validator) || V <- Values]}
-    catch
-        error:badarg ->
-            validation_error(Rule, Name)
-    end;
-
-validate(Rule = schema, Name, Value, Validator) ->
-    Defname = list_to_binary("#/definitions/" ++ {{packageName}}_utils:to_list(Name)),
-    case Validator(Value, Defname) of
-        ok ->
-            ok;
-        {error, [{schema_invalid, _, Error} | _]} ->
-            Info = #{
-                type => schema_invalid,
-                error => Error
-            },
-            validation_error(Rule, Name, Info);
-        {error, [{data_invalid, Schema, Error, _, Path} | _]} ->
-            Info = #{
-                type => data_invalid,
-                error => Error,
-                schema => Schema,
-                path => Path
-            },
-            validation_error(Rule, Name, Info);
-        {error, Reason} ->
-            throw(Reason)
-    end;
-
-validate(Rule, Name, _Value, _Validator) ->
-    error_logger:info_msg("Can't validate ~p with ~p", [Name, Rule]),
-    error({unknown_validation_rule, Rule}).
-
--spec parse_collection_value(Format :: 'csv' | 'ssv' | 'tsv' | 'pipes', binary()) -> Values :: [binary()].
-
-parse_collection_value(Format, Collection) ->
-    binary:split(Collection, get_split_pattern(Format), [global]).
-
-get_split_pattern('csv') ->
-    <<",">>;
-get_split_pattern('ssv') ->
-    <<" ">>;
-get_split_pattern('tsv') ->
-    <<"\t">>;
-get_split_pattern('pipes') ->
-    <<"|">>.
-
--spec validation_error(Rule :: any(), Name :: any()) -> no_return().
-
-validation_error(ViolatedRule, Name) ->
-    validation_error(ViolatedRule, Name, #{}).
-
--spec validation_error(Rule :: any(), Name :: any(), Info :: #{}) -> no_return().
-
-validation_error(ViolatedRule, Name, Info) ->
-    throw({wrong_param, Name, ViolatedRule, Info}).
+validate_response(OperationID, Code, Body, ID) ->
+    ok = {{packageName}}_validation:validate_response(OperationID, Code, Body, ID).
 
 -spec get_value(body | qs_val | header | binding, Name :: any(), Req0 :: cowboy_req:req()) ->
     {Value :: any(), Req :: cowboy_req:req()}.
 get_value(body, _Name, Req0) ->
     {ok, Body, Req} = cowboy_req:body(Req0),
-    Value = prepare_body(Body),
-    {Value, Req};
+    case prepare_body(Body) of
+        {ok, Value} ->
+            {ok, Value, Req};
+        {error, Reason} ->
+            {error, Reason, Req}
+    end;
 
 get_value(qs_val, Name, Req0) ->
     {QS, Req} = cowboy_req:qs_vals(Req0),
     Value = {{packageName}}_utils:get_opt({{packageName}}_utils:to_qs(Name), QS),
-    {Value, Req};
+    {ok, Value, Req};
 
 get_value(header, Name, Req0) ->
     {Headers, Req} = cowboy_req:headers(Req0),
     Value = {{packageName}}_utils:get_opt({{packageName}}_utils:to_header(Name), Headers),
-    {Value, Req};
+    {ok, Value, Req};
 
 get_value(binding, Name, Req0) ->
     {Bindings, Req} = cowboy_req:bindings(Req0),
     Value = {{packageName}}_utils:get_opt({{packageName}}_utils:to_binding(Name), Bindings),
-    {Value, Req}.
+    {ok, Value, Req}.
 
 prepare_body(Body) ->
-    case Body of
-        <<"">> -> <<"">>;
-        _ -> jsx:decode(Body, [return_maps])
-    end.
-
-validate_param(Rules, Name, Value, Validator) ->
-    lists:foldl(
-        fun(Rule, Acc) ->
-            case validate(Rule, Name, Acc, Validator) of
-                ok -> Acc;
-                {ok, Prepared} -> Prepared
-            end
-        end,
-        Value,
-        Rules
-    ).
-
-prepare_param(Rules, Name, Value, Validator) ->
     try
-        {ok, validate_param(Rules, Name, Value, Validator)}
+        {ok, jsx:decode(Body, [return_maps])}
     catch
-        throw:Reason ->
-            {error, Reason}
+        _:_ ->
+            {error, <<"Invalid json">>}
     end.
 
-binary_to_lower(V) when is_binary(V) ->
-    list_to_binary(string:to_lower({{packageName}}_utils:to_list(V))).
+-spec error_message(request_param(), {{packageName}}_validation:validation_error()) -> binary().
+
+error_message(Name, Error = #{type := Type}) ->
+    jsx:encode(#{
+        <<"name">> => {{packageName}}_utils:to_binary(Name),
+        <<"errorType">> => {{packageName}}_utils:to_binary(Type),
+        <<"description">> => maps:get(description, Error, <<"">>)
+    }).

@@ -1,5 +1,7 @@
 -module({{packageName}}_server).
 
+-behaviour(supervisor).
+
 -define(DEFAULT_ACCEPTORS_POOLSIZE, 100).
 -define(DEFAULT_LOGIC_HANDLER, {{packageName}}_default_logic_handler).
 
@@ -13,8 +15,10 @@
     ip                  => inet:ip_address(),
     port                => inet:port_number(),
     net_opts            => [],
-    validator_pool_opts => swagger_validator:pool_options()
+    validator_pool_opts => {{packageName}}_schema_validator:pool_options()
 }.
+
+-export_type([id/0]).
 
 -spec child_spec(id(), params()) -> supervisor:child_spec().
 
@@ -40,7 +44,7 @@ init({ID, Params}) ->
     }}.
 
 child_spec(validator, ID, Params) ->
-    {{packageName}}_validator:child_spec(ID, maps:get(validator_pool_opts, Params, #{}));
+    {{packageName}}_schema_validator:child_spec(ID, maps:get(validator_pool_opts, Params, #{}));
 
 child_spec(server, ID, #{
     ip            := IP ,

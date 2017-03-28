@@ -24,11 +24,11 @@ authorize_api_key(_, _) ->
     Req :: cowboy_req:req(),
     Context :: {{packageName}}_api:request_context()
 ) ->
-    {Status :: cowboy:http_status(), Headers :: cowboy:http_headers(), Body :: #{}}.
+    {{packageName}}_logic_handler:handler_response().
 
 handle_request(OperationID, Req, Context) ->
     error_logger:error_msg(
         "Got not implemented request to process: ~p~n",
         [{OperationID, Req, Context}]
     ),
-    {501, [], #{}}.
+    {error, {501, [], undefined}}.

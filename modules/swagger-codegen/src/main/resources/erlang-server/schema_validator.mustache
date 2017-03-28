@@ -1,9 +1,11 @@
--module({{packageName}}_validator).
+-module({{packageName}}_schema_validator).
+
+-behaviour(gen_server).
 
 -export([child_spec/2]).
 -export([get_validator/1]).
 
--export([start_link/0]).
+-export([start_link/1]).
 -export([validate/3]).
 
 -export([init/1]).
@@ -17,15 +19,17 @@
 -export_type([validator/0]).
 -export_type([pool_options/0]).
 
+-define(DEFAULT_SCHEMA_VER, <<"http://json-schema.org/draft-04/schema#">>).
+
 -type json() :: jsx:json_term().
 -type defname() :: binary().
--type validate_error() :: [term()].
--type validator() :: fun((json(), defname()) -> ok | {error, validate_error() | unavailable}).
+-type error_reason() :: binary().
+-type validator() :: fun((json(), defname()) -> ok | {error, [error_reason()] | unavailable}).
 
 -type pool_time_interval() :: {non_neg_integer(), min | sec | ms}.
 -type pool_options() :: #{
     name                 => term(),
-    start_mfa            => {atom(), atom(), list()},
+    start_mfa            => {atom(), atom(), [term()]},
     max_count            => non_neg_integer(),
     init_count           => non_neg_integer(),
     cull_interval        => pool_time_interval(),
@@ -33,9 +37,14 @@
     member_start_timeout => pool_time_interval()
 }.
 
+-type start_args() :: #{
+    schema_ver => binary()
+}.
+
 -define(DEFAULT_POOL_OPTIONS, #{
     init_count => 1,
-    max_count  => 20
+    max_count  => 20,
+    start_mfa => {?MODULE, start_link, [#{}]}
 }).
 
 -define(DEFAULT_TAKE_TIMEOUT, {3, sec}).
@@ -48,14 +57,13 @@ child_spec(ID, PoolOptions) ->
         maps:merge(
             maps:merge(?DEFAULT_POOL_OPTIONS, PoolOptions),
             #{
-                name      => construct_pool_name(ID),
-                start_mfa => {?MODULE, start_link, []}
+                name => construct_pool_name(ID)
             }
         )
     )).
 
 -spec validate(ID :: atom(), json(), defname()) ->
-    ok | {error, validate_error() | undefined}.
+    ok | {error, [error_reason()] | unavailable}.
 
 validate(ID, Json, Defname) ->
     validate_(construct_pool_name(ID), Json, Defname).
@@ -84,11 +92,11 @@ get_validator(ID) ->
         validate_(PoolName, Json, Defname)
     end.
 
--spec start_link() ->
+-spec start_link(start_args()) ->
     {ok, pid()}.
 
-start_link() ->
-    gen_server:start_link(?MODULE, [], []).
+start_link(Options) ->
+    gen_server:start_link(?MODULE, Options, []).
 
 %%
 
@@ -103,27 +111,30 @@ do_validate(Pid, Json, Defname) ->
 -type state() ::
     jesse_state:state().
 
--spec init(_) ->
+-spec init(start_args()) ->
     {ok, state()}.
 
-init(_) ->
+init(Options) ->
+    SchemaVer = maps:get(schema_ver, Options, ?DEFAULT_SCHEMA_VER),
     Schema = get_swagger_schema(),
-    {ok, prepare_validator(Schema)}.
+    {ok, prepare_validator(Schema, SchemaVer)}.
 
 -spec handle_call({validate, json(), defname()} | _, _From, state()) ->
     {reply, ok | {error, [term()]}, state()} | {noreply, state()}.
 
 handle_call({validate, Json, Defname}, _From, State) ->
     try
-        _ = jesse_schema_validator:validate_with_state(
+        ResultState = jesse_schema_validator:validate_with_state(
             [{<<"$ref">>, Defname}],
             Json,
             State
         ),
+        ok = check_result(ResultState),
         {reply, ok, State}
     catch
         throw:Errors when is_list(Errors) ->
-            {reply, {error, Errors}, State}
+            Reasons = [map_error_reason(E) || E <- Errors],
+            {reply, {error, Reasons}, State}
     end;
 
 handle_call(_Call, _From, State) ->
@@ -151,13 +162,91 @@ code_change(_, State, _) ->
 terminate(_, _) ->
     ok.
 
+map_error_reason({
+    'data_invalid',
+    _Schema,
+    Error,
+    _Data,
+    Path0
+}) ->
+    Path = get_error_path(Path0),
+    Description = get_error_description(Error),
+    {{packageName}}_utils:join(".", [Description, Path]).
+
+get_error_description(all_schemas_not_valid) ->
+    {schema_violated, <<"Schema rule \"AllOf\" violated">>};
+
+get_error_description(any_schemas_not_valid) ->
+    {schema_violated, <<"Schema rule \"AnyOf\" violated">>};
+
+get_error_description({missing_dependency, Dependency0}) ->
+    Dependency = {{packageName}}_utils:to_binary(Dependency0),
+    {schema_violated, <<"Missing dependency \"", Dependency/binary>>};
+
+get_error_description(missing_required_property) ->
+    <<"Missing required property">>;
+
+get_error_description(no_extra_items_allowed) ->
+    <<"Extra items not allowed">>;
+
+get_error_description(no_extra_properties_allowed) ->
+    <<"Extra properties not allowed">>;
+
+get_error_description(no_match) ->
+    <<"No match to pattern">>;
+
+get_error_description(not_found) ->
+    <<"Not found">>;
+
+get_error_description(not_in_range) ->
+    <<"Not in range">>;
+
+get_error_description(not_multiple_of) ->
+     <<"Schema rule \"MultipleOf\" violated">>;
+
+get_error_description(not_one_schema_valid) ->
+    <<"Schema rule \"OneOf\" violated">>;
+
+get_error_description(not_schema_valid) ->
+    <<"Schema rule \"Not\" violated">>;
+
+get_error_description(too_few_properties) ->
+    <<"Too few properties">>;
+
+get_error_description(too_many_properties) ->
+     <<"Too many properties">>;
+
+get_error_description(wrong_length) ->
+    <<"Wrong length">>;
+
+get_error_description(wrong_size) ->
+    <<"Wrong size">>;
+
+get_error_description(wrong_type) ->
+    <<"Wrong type">>.
+
+get_error_path([]) ->
+    <<"">>;
+
+get_error_path(Path) ->
+    PreparedPath = {{packageName}}_utils:join(".", Path),
+    <<"Path to item: ", PreparedPath/binary>>.
 %%
 
-prepare_validator(Schema) ->
-    jesse_state:new(Schema, [{default_schema_ver, <<"http://json-schema.org/draft-04/schema#">>}]).
+prepare_validator(Schema, SchemaVer) ->
+    jesse_state:new(Schema, [{default_schema_ver, SchemaVer}]).
 
 get_swagger_schema() ->
     {ok, AppName} = application:get_application(?MODULE),
     Filepath = filename:join({{packageName}}_utils:priv_dir(AppName), "swagger.json"),
     {ok, Contents} = file:read_file(Filepath),
     jsx:decode(Contents).
+
+-spec check_result(state()) -> ok | no_return().
+
+check_result(State) ->
+    ErrorList = jesse_state:get_error_list(State),
+    case ErrorList of
+        [] -> ok;
+        _  -> throw(ErrorList)
+    end.
