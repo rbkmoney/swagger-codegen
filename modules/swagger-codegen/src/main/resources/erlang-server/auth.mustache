@@ -8,9 +8,9 @@
 
 -spec authorize_api_key(
     LogicHandler :: atom(),
-    OperationID :: {{packageName}}_api:operation_id(),
-    From :: header | qs_val,
-    KeyParam :: iodata() | atom(),
+    OperationID  :: {{packageName}}_api:operation_id(),
+    From         :: header | qs_val,
+    KeyParam     :: iodata() | atom(),
     Req ::cowboy_req:req()
 )-> {true, Context :: context(), Req ::cowboy_req:req()} |
     {false, AuthHeader :: binary(), Req ::cowboy_req:req()}.

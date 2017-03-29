@@ -11,7 +11,7 @@
 
 {{#authMethods}}
     {{#isApiKey}}
--spec authorize_api_key(OperationID :: {{packageName}}_api:operation_id(), ApiKey :: binary()) ->
+-spec authorize_api_key({{packageName}}_api:operation_id(), {{packageName}}_api:api_key()) ->
     {true, undefined}.
 
 authorize_api_key(_, _) ->
@@ -19,11 +19,7 @@ authorize_api_key(_, _) ->
     {{/isApiKey}}
 {{/authMethods}}
 
--spec handle_request(
-    OperationID :: {{packageName}}_api:operation_id(),
-    Req :: cowboy_req:req(),
-    Context :: {{packageName}}_api:request_context()
-) ->
+-spec handle_request({{packageName}}_api:operation_id(), cowboy_req:req(), {{packageName}}_api:request_context()) ->
     {{packageName}}_logic_handler:handler_response().
 
 handle_request(OperationID, Req, Context) ->

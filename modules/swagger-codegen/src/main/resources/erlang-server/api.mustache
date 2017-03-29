@@ -3,10 +3,6 @@
 -export([populate_request/3]).
 -export([validate_response/4]).
 
--type operation_id() :: atom().
--type request_param() :: atom().
-
-
 -type request_context() :: #{
     auth_context => AuthContext :: {{packageName}}_auth:context(),
     peer => client_peer()
@@ -17,32 +13,26 @@
     port_number => Port :: inet:port_number()
 }.
 
--export_type([operation_id/0]).
+-type operation_id() :: atom().
+
+-type api_key() :: binary().
+
 -export_type([request_context/0]).
 -export_type([client_peer/0]).
+-export_type([operation_id/0]).
+-export_type([api_key/0]).
 
--spec request_params(OperationID :: operation_id()) -> [Param :: request_param()].
-{{#apiInfo}}{{#apis}}
-{{#operations}}{{#operation}}
-request_params('{{operationId}}') ->
-    [{{#allParams}}{{^isBodyParam}}
-        '{{baseName}}'{{/isBodyParam}}{{#isBodyParam}}
-        '{{dataType}}'{{/isBodyParam}}{{#hasMore}},{{/hasMore}}{{/allParams}}
-    ];
-{{/operation}}{{/operations}}{{/apis}}{{/apiInfo}}
-request_params(_) ->
-    error(unknown_operation).
 
 -spec populate_request(
-    OperationID :: operation_id(),
-    Req :: cowboy_req:req(),
+    operation_id(),
+    cowboy_req:req(),
     {{packageName}}_server:id()
 ) ->
     {ok, Model :: map(), Req :: cowboy_req:req()} |
     {error, Reason :: unavailable | binary(), Req :: cowboy_req:req()}.
 
 populate_request(OperationID, Req, ID) ->
-    Params = request_params(OperationID),
+    Params = {{packageName}}_validation_schema:request_params(OperationID),
     populate_request_params(OperationID, Params, Req, #{}, ID).
 
 populate_request_params(_, [], Req, Model, _) ->
@@ -57,10 +47,10 @@ populate_request_params(OperationID, [FieldParams | T], Req0, Model, ID) ->
     end.
 
 populate_request_param(OperationID, Name, Req0, ID) ->
-    #{rules := Rules, source := Source} = {{packageName}}_validation:request_param_info(OperationID, Name),
+    #{rules := Rules, source := Source} = {{packageName}}_validation_schema:request_param_info(OperationID, Name),
     case get_value(Source, Name, Req0) of
         {ok, Value, Req} ->
-            case {{packageName}}_validation:prepare_param(Rules, Name, Value, ID) of
+            case {{packageName}}_validation:prepare_request_param(Rules, Name, Value, ID) of
                 {ok, Result} ->
                     {ok, Name, Result, Req};
                 {error, Error = #{type := _}}  ->
@@ -73,14 +63,16 @@ populate_request_param(OperationID, Name, Req0, ID) ->
     end.
 
 -spec validate_response(
-    OperationID :: operation_id(),
-    Code :: 200..599,
-    Body :: jesse:json_term() | undefined,
+    operation_id(),
+    200..599,
+    jesse:json_term() | undefined,
     {{packageName}}_server:id()
-) -> ok | no_return().
+) ->
+    ok | no_return().
 
 validate_response(OperationID, Code, Body, ID) ->
-    ok = {{packageName}}_validation:validate_response(OperationID, Code, Body, ID).
+    ResponseSpec = {{packageName}}_validation_schema:response_data_info(OperationID, Code),
+    ok = {{packageName}}_validation:validate_response(ResponseSpec, Body, ID).
 
 get_value(body, _Name, Req0) ->
     {ok, Body, Req} = cowboy_req:body(Req0),
@@ -114,7 +106,11 @@ prepare_body(Body) ->
             {error, <<"Invalid json">>}
     end.
 
--spec error_message(request_param(), {{packageName}}_validation:validation_error()) -> binary().
+-spec error_message(
+    {{packageName}}_validation_schema:param_name(),
+    {{packageName}}_validation:validation_error()
+) ->
+    binary().
 
 error_message(Name, Error = #{type := Type}) ->
     jsx:encode(#{

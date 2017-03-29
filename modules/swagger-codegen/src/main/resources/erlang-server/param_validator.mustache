@@ -2,8 +2,11 @@
 
 -export([validate/2]).
 
--spec validate({{packageName}}_validation:param_rule(), Value :: term()) ->
-	ok | {ok, NewValue :: term()} | error.
+-spec validate(
+    {{packageName}}_validation_schema:param_rule(),
+    {{packageName}}_validation:value()
+) ->
+	ok | {ok, {{packageName}}_validation:value()} | error.
 
 validate({required, Req}, Value) ->
     case Value of

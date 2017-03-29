@@ -52,7 +52,7 @@
 
 -define(DEFAULT_TAKE_TIMEOUT, {3, sec}).
 
--spec child_spec(ID :: atom(), Params :: params()) ->
+-spec child_spec({{packageName}}_server:id(),params()) ->
     supervisor:child_spec().
 
 child_spec(ID, Params) ->
@@ -68,7 +68,7 @@ child_spec(ID, Params) ->
         )
     )).
 
--spec validate(ID :: atom(), json(), defname()) ->
+-spec validate({{packageName}}_server:id(), json(), defname()) ->
     ok | {error, [error_reason()] | unavailable}.
 
 validate(ID, Json, Defname) ->

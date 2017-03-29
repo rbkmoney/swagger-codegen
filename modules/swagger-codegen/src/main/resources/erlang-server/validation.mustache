@@ -1,25 +1,7 @@
 -module({{packageName}}_validation).
 
--type rule() ::
-    schema |
-    param_rule().
-
--type param_rule() ::
-    {type, 'binary'} |
-    {type, 'byte'} |
-    {type, 'int32'} |
-    {type, 'int64'} |
-    {type, 'float'} |
-    {type, 'boolean'} |
-    {type, 'date'} |
-    {type, 'datetime'} |
-    {enum, [atom()]} |
-    {max, Max :: number(), Type :: exclusive | inclusive} |
-    {min, Min :: number(), Type :: exclusive | inclusive} |
-    {max_length, MaxLength :: integer()} |
-    {min_length, MaxLength :: integer()} |
-    {pattern, Pattern :: string()} |
-    {required, boolean()}.
+-export([prepare_request_param/4]).
+-export([validate_response/3]).
 
 -type validation_error() :: #{
     type := error_type(),
@@ -35,16 +17,11 @@
     schema_violated |
     wrong_type.
 
--type operation_id() :: atom().
+-type value() :: term().
 
--export_type([rule/0]).
--export_type([param_rule/0]).
 -export_type([validation_error/0]).
 -export_type([error_type/0]).
-
--export([request_param_info/2]).
--export([prepare_param/4]).
--export([validate_response/4]).
+-export_type([value/0]).
 
 -define(catch_error(Block),
     try
@@ -57,49 +34,27 @@
     end
 ).
 
--spec request_param_info(
-    OperationID :: operation_id(),
-    Name :: atom()
-) -> #{
-    source => qs_val | binding | header | body,
-    rules => [rule()]
-}.
+-spec prepare_request_param(
+    [{{packageName}}_validation_schema:rule()],
+    {{packageName}}_validation_schema:param_name(),
+    value(),
+    {{packageName}}_server:id()
+) ->
+    {ok, term()} |
+    {error, validation_error() | unavailable}.
 
-{{#apiInfo}}{{#apis}}
-{{#operations}}{{#operation}}{{#allParams}}
-request_param_info('{{operationId}}', {{^isBodyParam}}'{{baseName}}'{{/isBodyParam}}{{#isBodyParam}}'{{dataType}}'{{/isBodyParam}}) ->
-    #{
-        source => {{#isQueryParam}}qs_val{{/isQueryParam}} {{#isPathParam}}binding{{/isPathParam}} {{#isHeaderParam}}header{{/isHeaderParam}}{{#isBodyParam}}body{{/isBodyParam}},
-        rules => {{#isListContainer}}[{list, '{{collectionFormat}}', {{#items}}[{{>api.param_info}}]{{/items}}}, {{>api.param_info}}]{{/isListContainer}}{{^isListContainer}}[{{>api.param_info}}]{{/isListContainer}}
-    };
-{{/allParams}}{{/operation}}{{/operations}}{{/apis}}{{/apiInfo}}
-request_param_info(OperationID, Name) ->
-    error({unknown_param, OperationID, Name}).
-
--spec prepare_param([rule()], Name :: atom(), Value :: term(), {{packageName}}_server:id()) ->
-    {ok, term()} | {error, validation_error() | unavailable}.
-
-prepare_param(Rules, Name, Value, ID) ->
+prepare_request_param(Rules, Name, Value, ID) ->
     ?catch_error(validate_param(Rules, Name, Value, ID)).
 
 -spec validate_response(
-    operation_id(),
-    Code :: term(),
-    Body :: term(),
+    {{packageName}}_validation_schema:response_spec(),
+    value(),
     {{packageName}}_server:id()
-) -> ok | {error, validation_error() | unavailable}.
-{{#apiInfo}}{{#apis}}
-{{#operations}}{{#operation}}
-{{#responses}}
-validate_response('{{operationId}}', {{code}}, Body, {{^dataType}}_{{/dataType}}ID) ->
-    {{#dataType}}validate_response_body('{{dataType}}', '{{baseType}}', Body, ID);
-    {{/dataType}}{{^dataType}}validate_empty_body(Body);{{/dataType}}
-{{/responses}}
-{{/operation}}{{/operations}}{{/apis}}{{/apiInfo}}
-validate_response(OperationID, Code, _Body, _ID) ->
-    error({unknown_operation, OperationID, Code}).
+) ->
+    ok |
+    {error, validation_error() | unavailable}.
 
-validate_response_body(DataType, BaseType, Body, ID) ->
+validate_response({DataType, BaseType}, Body, ID) ->
     Result = case DataType of
         'list' ->
             ?catch_error(
@@ -111,12 +66,12 @@ validate_response_body(DataType, BaseType, Body, ID) ->
     case Result of
         E = {error, _} -> E;
         _ -> ok
-    end.
+    end;
 
-validate_empty_body(undefined) ->
+validate_response(undefined, undefined, _) ->
     ok;
 
-validate_empty_body(_) ->
+validate_response(undefined, _, _) ->
     #{
         type => schema_violated,
         description => <<"Must be empty">>
@@ -152,16 +107,21 @@ validate(Rule, Name, Value, _ID) ->
             report_validation_error(Rule, Name)
     end.
 
--spec report_validation_error(Rule :: any(), Name :: atom()) -> no_return().
+-spec report_validation_error(
+    {{packageName}}_validation_schema:rule(),
+    {{packageName}}_validation_schema:param_name()
+) ->
+    no_return().
 
 report_validation_error(Rule, Name) ->
     Errors = [map_error(Rule)],
     report_validation_errors(Name, Errors).
 
 -spec report_validation_errors(
-    Name :: atom(),
+    {{packageName}}_validation_schema:param_name(),
     [{{packageName}}_validation:validation_error()]
-) -> no_return().
+) ->
+    no_return().
 
 report_validation_errors(Name, Errors) ->
     throw({wrong_param, Name, Errors}).
@@ -190,7 +150,10 @@ map_error(Rule, Description) ->
         _ -> Error#{description => Description}
     end.
 
--spec map_violated_rule(rule()) -> error_type().
+-spec map_violated_rule(
+    {{packageName}}_validation_schema:rule()
+) ->
+    error_type().
 
 map_violated_rule({type, _Type}) ->  wrong_type;
 map_violated_rule({enum, _}) ->  not_in_range;
@@ -203,9 +166,10 @@ map_violated_rule(schema) ->  schema_violated;
 map_violated_rule({required, _}) ->  not_found.
 
 -spec parse_collection_value(
-    Format :: 'csv' | 'ssv' | 'tsv' | 'pipes',
-    binary()
-) -> Values :: [binary()].
+    Format     :: 'csv' | 'ssv' | 'tsv' | 'pipes',
+    Collection :: binary()
+) ->
+    Values :: [binary()].
 
 parse_collection_value(Format, Collection) ->
     binary:split(Collection, get_split_pattern(Format), [global]).
