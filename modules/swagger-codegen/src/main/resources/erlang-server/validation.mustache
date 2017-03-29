@@ -132,9 +132,7 @@ validate(Rule = {'list', Format, Ruleset}, Name, Value, ID) ->
     end;
 
 validate(Rule = schema, Name, Value, ID) ->
-    Defname = list_to_binary("#/definitions/" ++ {{packageName}}_utils:to_list(Name)),
-    Validator = {{packageName}}_schema_validator:get_validator(ID),
-    case Validator(Value, Defname) of
+    case {{packageName}}_schema_validator:validate(ID, Value, {{packageName}}_utils:to_list(Name)) of
         ok ->
             ok;
         {error, Reasons} when is_list(Reasons) ->

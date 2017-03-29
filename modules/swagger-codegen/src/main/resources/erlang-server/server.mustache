@@ -15,11 +15,14 @@
     ip                   := inet:ip_address(),
     port                 := inet:port_number(),
     net_opts             := [],
-    validator_schema_uri := swagger_validator:schema_uri(),
-    validator_pool_opts  => swagger_validator:pool_options(),
+    validator_schema_uri := {{packageName}}_schema_validator:schema_uri(),
+    validator_pool_opts  => {{packageName}}_schema_validator:pool_options(),
     logic_handler        => module(),
     cowboy_extra_opts    => list()
 }.
+
+-export_type([id/0]).
+-export_type([params/0]).
 
 -define(VALIDATOR_PARAMS, [validator_schema_uri, validator_pool_opts]).
 

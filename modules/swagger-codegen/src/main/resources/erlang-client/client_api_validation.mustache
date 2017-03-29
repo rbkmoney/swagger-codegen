@@ -83,12 +83,6 @@ get_swagger_path() ->
     {ok, AppName} = application:get_application(?MODULE),
     filename:join({{packageName}}_client_api_utils:priv_dir(AppName), "swagger.json").
 
-%% get_swagger_schema() ->
-%%     %% Read swagger.json in compile time (via parse transform)
-%%     %% since swagger schema is essentially a part of the code.
-%%     {ok, Schema} = ct_expand:term(file:read_file(code:priv_dir({{packageName}}) ++ "/swagger.json")),
-%%     Schema.
-
 -spec validate(Rule :: rule(), Name :: term(), Value :: term(), schema_uri()) -> ok | {ok, term()} | no_return().
 validate(Rule = {required, true}, Name, Value, _SchemaUri) ->
     case Value of

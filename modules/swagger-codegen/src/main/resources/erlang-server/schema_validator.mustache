@@ -3,10 +3,9 @@
 -behaviour(gen_server).
 
 -export([child_spec/2]).
--export([get_validator/1]).
+-export([validate/3]).
 
 -export([start_link/1]).
--export([validate/3]).
 
 -export([init/1]).
 -export([handle_call/3]).
@@ -16,7 +15,6 @@
 -export([terminate/2]).
 
 -export_type([defname/0]).
--export_type([validator/0]).
 -export_type([pool_options/0]).
 -export_type([schema_uri/0]).
 -export_type([params/0]).
@@ -25,7 +23,6 @@
 -type schema_uri()     :: string().
 -type defname()        :: string().
 -type error_reason()   :: binary().
--type validator()      :: fun((json(), defname()) -> ok | {error, [error_reason()] | unavailable}).
 
 -type pool_time_interval() :: {non_neg_integer(), min | sec | ms}.
 -type pool_options() :: #{
@@ -39,12 +36,12 @@
 }.
 
 -type params() :: #{
-    validator_pool_opts  => pool_options(),
-    validator_schema_uri := schema_uri()
+    validator_schema_uri := schema_uri(),
+    validator_pool_opts  => pool_options()
 }.
 
 -type state() :: #{
-    schema_uri => schema_uri()
+    schema_uri := schema_uri()
 }.
 
 -define(DEFAULT_POOL_OPTIONS, #{
@@ -92,15 +89,6 @@ validate_(PoolName, Json, Defname) ->
             {error, unavailable}
     end.
 
--spec get_validator(ID :: atom()) ->
-    validator().
-
-get_validator(ID) ->
-    PoolName = construct_pool_name(ID),
-    fun (Json, Defname) ->
-        validate_(PoolName, Json, Defname)
-    end.
-
 -spec start_link(state()) ->
     {ok, pid()}.
 
@@ -115,12 +103,6 @@ prepare_state(#{validator_schema_uri := SchemaUri}) ->
 prepare_validator(SchemaUri) ->
     Schema = get_swagger_schema(),
     jesse:add_schema(SchemaUri, Schema, [{parser_fun, fun jsx:decode/1}]).
-
-%% get_swagger_schema() ->
-%%     %% Read swagger.json in compile time (via parse transform)
-%%     %% since swagger schema is essentially a part of the code.
-%%     {ok, Schema} = ct_expand:term(file:read_file(code:priv_dir({{packageName}}) ++ "/swagger.json")),
-%%     Schema.
 
 get_swagger_schema() ->
     {ok, AppName} = application:get_application(?MODULE),
