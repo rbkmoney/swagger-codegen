@@ -1,26 +1,25 @@
 -module({{packageName}}_router).
 
--export([get_paths/2]).
+-export([get_paths/1]).
 
 -type operations() :: #{
     Method :: binary() => {{packageName}}_api:operation_id()
 }.
 
 -type init_opts()  :: {
-    ID           :: atom(),
     Operations   :: operations(),
     LogicHandler :: atom()
 }.
 
 -export_type([init_opts/0]).
 
--spec get_paths(ID :: atom(), LogicHandler :: atom()) ->  [{'_',[{
+-spec get_paths(LogicHandler :: atom()) ->  [{'_',[{
     Path :: string(),
     Handler :: atom(),
     InitOpts :: init_opts()
 }]}].
 
-get_paths(ID, LogicHandler) ->
+get_paths(LogicHandler) ->
     PreparedPaths = maps:fold(
         fun(Path, #{operations := Operations, handler := Handler}, Acc) ->
             [{Path, Handler, Operations} | Acc]
@@ -30,7 +29,7 @@ get_paths(ID, LogicHandler) ->
     ),
     [
         {'_',
-            [{P, H, {ID, O, LogicHandler}} || {P, H, O} <- PreparedPaths]
+            [{P, H, {O, LogicHandler}} || {P, H, O} <- PreparedPaths]
         }
     ].
 
