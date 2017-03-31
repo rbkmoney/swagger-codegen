@@ -15,16 +15,12 @@
     ip                   := inet:ip_address(),
     port                 := inet:port_number(),
     net_opts             := [],
-    validator_schema_uri := {{packageName}}_schema_validator:schema_uri(),
-    validator_pool_opts  => {{packageName}}_schema_validator:pool_options(),
     logic_handler        => module(),
     cowboy_extra_opts    => list()
 }.
 
 -export_type([id/0]).
 -export_type([params/0]).
-
--define(VALIDATOR_PARAMS, [validator_schema_uri, validator_pool_opts]).
 
 -spec child_spec(id(), params()) -> supervisor:child_spec().
 
@@ -41,16 +37,13 @@ start_link(ID, Params) ->
     {ok, {supervisor:sup_flags(), [supervisor:child_spec()]}}.
 
 init({ID, Params}) ->
+    {{packageName}}_schema_validator:init(),
     {ok, {
         #{strategy => rest_for_one},
         [
-            child_spec(validator, ID, Params),
-            child_spec(server   , ID, Params)
+            child_spec(server, ID, Params)
         ]
     }}.
-
-child_spec(validator, ID, Params) ->
-    {{packageName}}_schema_validator:child_spec(ID, maps:with(?VALIDATOR_PARAMS, Params));
 
 child_spec(server, ID, #{
     ip            := IP ,
@@ -61,7 +54,7 @@ child_spec(server, ID, #{
     {Transport, TransportOpts} = get_socket_transport(IP, Port, NetOpts),
     LogicHandler = maps:get(logic_handler, Params, ?DEFAULT_LOGIC_HANDLER),
     ExtraOpts = maps:get(cowboy_extra_opts, Params, []),
-    CowboyOpts = get_cowboy_config(ID, LogicHandler, ExtraOpts),
+    CowboyOpts = get_cowboy_config(LogicHandler, ExtraOpts),
     ranch:child_spec({?MODULE, ID}, AcceptorsPool,
         Transport, TransportOpts, cowboy_protocol, CowboyOpts).
 
@@ -77,30 +70,30 @@ get_socket_transport(IP, Port, Options) ->
             {ranch_tcp, Opts}
     end.
 
-get_cowboy_config(ID, LogicHandler, ExtraOpts) ->
-    get_cowboy_config(ID, LogicHandler, ExtraOpts, get_default_opts(ID, LogicHandler)).
+get_cowboy_config(LogicHandler, ExtraOpts) ->
+    get_cowboy_config(LogicHandler, ExtraOpts, get_default_opts(LogicHandler)).
 
-get_cowboy_config(_ID, _LogicHandler, [], Opts) ->
+get_cowboy_config(_LogicHandler, [], Opts) ->
     Opts;
 
-get_cowboy_config(ID, LogicHandler, [{env, Env} | Rest], Opts) ->
+get_cowboy_config(LogicHandler, [{env, Env} | Rest], Opts) ->
     NewEnv = case proplists:get_value(dispatch, Env) of
         undefined ->
-            [get_default_dispatch(ID, LogicHandler) | Env];
+            [get_default_dispatch(LogicHandler) | Env];
         _ ->
             Env
     end,
-    get_cowboy_config(ID, LogicHandler, Rest, store_key(env, NewEnv, Opts));
+    get_cowboy_config(LogicHandler, Rest, store_key(env, NewEnv, Opts));
 
-get_cowboy_config(ID, LogicHandler, [{Key, Value} | Rest], Opts) ->
-    get_cowboy_config(ID, LogicHandler, Rest, store_key(Key, Value, Opts)).
+get_cowboy_config(LogicHandler, [{Key, Value} | Rest], Opts) ->
+    get_cowboy_config(LogicHandler, Rest, store_key(Key, Value, Opts)).
 
-get_default_dispatch(ID, LogicHandler) ->
-    Paths = {{packageName}}_router:get_paths(ID, LogicHandler),
+get_default_dispatch(LogicHandler) ->
+    Paths = {{packageName}}_router:get_paths(LogicHandler),
     {dispatch, cowboy_router:compile(Paths)}.
 
-get_default_opts(ID, LogicHandler) ->
-    [{env, [get_default_dispatch(ID, LogicHandler)]}].
+get_default_opts(LogicHandler) ->
+    [{env, [get_default_dispatch(LogicHandler)]}].
 
 store_key(Key, Value, Opts) ->
     lists:keystore(Key, 1, Opts, {Key, Value}).

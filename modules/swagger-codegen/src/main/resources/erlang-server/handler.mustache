@@ -38,7 +38,7 @@ init(_Transport, Req, Opts) ->
 -spec rest_init(Req :: cowboy_req:req(), Opts :: {{packageName}}_router:init_opts()) ->
     {ok, Req :: cowboy_req:req(), State :: state()}.
 
-rest_init(Req0, {ID, Operations, LogicHandler}) ->
+rest_init(Req0, {Operations, LogicHandler}) ->
     {Method, Req1} = cowboy_req:method(Req0),
     OperationID = maps:get(Method, Operations, undefined),
 
@@ -47,8 +47,7 @@ rest_init(Req0, {ID, Operations, LogicHandler}) ->
     State = #state{
         operation_id = OperationID,
         logic_handler = LogicHandler,
-        context = #{},
-        id = ID
+        context = #{}
     },
 
     {ok, Req1, State}.
@@ -90,7 +89,7 @@ is_authorized(
         LogicHandler,
         OperationID,
         From,
-        "{{keyParamName}}",
+        '{{keyParamName}}',
         Req0
     ),
     case Result of
@@ -264,11 +263,10 @@ handle_request_json(
     State = #state{
         operation_id = OperationID,
         logic_handler = LogicHandler,
-        context = Context,
-        id = ID
+        context = Context
     }
 ) ->
-    case {{packageName}}_api:populate_request(OperationID, Req0, ID) of
+    case {{packageName}}_api:populate_request(OperationID, Req0) of
         {ok, Populated, Req1} ->
             Result =  {{packageName}}_logic_handler:handle_request(
                 LogicHandler,
@@ -276,7 +274,7 @@ handle_request_json(
                 Populated,
                 Context
             ),
-            _ = validate_response(OperationID, Result, ID),
+            _ = validate_response(OperationID, Result),
 
             {_, {Code, Headers, Body}} = Result,
             PreparedBody = case Body of
@@ -289,16 +287,16 @@ handle_request_json(
             process_response({error, Reason}, Req1, State)
     end.
 
-validate_response(_, {error, _}, _) ->
+validate_response(_, {error, _}) ->
     ok;
 
-validate_response(OperationID, {ok, {Code, _Headers, Body}}, ID) ->
+validate_response(OperationID, {ok, {Code, _Headers, Body}}) ->
     {{packageName}}_api:validate_response(
         OperationID,
         Code,
-        Body,
-        ID
+        Body
     ).
 
 validate_headers(_, Req) ->
     {true, Req}.
+

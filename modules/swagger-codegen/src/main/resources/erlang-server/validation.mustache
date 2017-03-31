@@ -1,7 +1,7 @@
 -module({{packageName}}_validation).
 
--export([prepare_request_param/4]).
--export([validate_response/3]).
+-export([prepare_request_param/3]).
+-export([validate_response/2]).
 
 -type validation_error() :: #{
     type := error_type(),
@@ -37,67 +37,63 @@
 -spec prepare_request_param(
     [{{packageName}}_validation_schema:rule()],
     {{packageName}}_validation_schema:param_name(),
-    value(),
-    {{packageName}}_server:id()
+    value()
 ) ->
     {ok, term()} |
     {error, validation_error() | unavailable}.
 
-prepare_request_param(Rules, Name, Value, ID) ->
-    ?catch_error(validate_param(Rules, Name, Value, ID)).
+prepare_request_param(Rules, Name, Value) ->
+    ?catch_error(validate_param(Rules, Name, Value)).
 
 -spec validate_response(
     {{packageName}}_validation_schema:response_spec(),
-    value(),
-    {{packageName}}_server:id()
+    value()
 ) ->
     ok |
     {error, validation_error() | unavailable}.
 
-validate_response({DataType, BaseType}, Body, ID) ->
+validate_response({DataType, BaseType}, Body) ->
     Result = case DataType of
         'list' ->
             ?catch_error(
-                [validate(schema, BaseType, Item, ID) || Item <- Body]
+                [validate(schema, BaseType, Item) || Item <- Body]
             );
         _ ->
-            ?catch_error(validate(schema, BaseType, Body, ID))
+            ?catch_error(validate(schema, BaseType, Body))
     end,
     case Result of
         E = {error, _} -> E;
         _ -> ok
     end;
 
-validate_response(undefined, undefined, _) ->
+validate_response(undefined, undefined) ->
     ok;
 
-validate_response(undefined, _, _) ->
+validate_response(undefined, _) ->
     #{
         type => schema_violated,
         description => <<"Must be empty">>
     }.
 
-validate(Rule = {'list', Format, Ruleset}, Name, Value, ID) ->
+validate(Rule = {'list', Format, Ruleset}, Name, Value) ->
     try
         Values = parse_collection_value(Format, Value),
-        {ok, [validate_param(Ruleset, Name, V, ID) || V <- Values]}
+        {ok, [validate_param(Ruleset, Name, V) || V <- Values]}
     catch
         error:badarg ->
             report_validation_error(Rule, Name)
     end;
 
-validate(Rule = schema, Name, Value, ID) ->
-    case {{packageName}}_schema_validator:validate(ID, Value, {{packageName}}_utils:to_list(Name)) of
+validate(Rule = schema, Name, Value) ->
+    case {{packageName}}_schema_validator:validate(Value, Name) of
         ok ->
             ok;
         {error, Reasons} when is_list(Reasons) ->
             Errors = [map_error(Rule, R) || R <- Reasons],
-            report_validation_errors(Name, Errors);
-        {error, Reason} ->
-            throw(Reason)
+            report_validation_errors(Name, Errors)
     end;
 
-validate(Rule, Name, Value, _ID) ->
+validate(Rule, Name, Value) ->
     case {{packageName}}_param_validator:validate(Rule, Value) of
         ok ->
             ok;
@@ -126,10 +122,10 @@ report_validation_error(Rule, Name) ->
 report_validation_errors(Name, Errors) ->
     throw({wrong_param, Name, Errors}).
 
-validate_param(Rules, Name, Value, ID) ->
+validate_param(Rules, Name, Value) ->
     lists:foldl(
         fun(Rule, Acc) ->
-            case validate(Rule, Name, Acc, ID) of
+            case validate(Rule, Name, Acc) of
                 ok -> Acc;
                 {ok, Prepared} -> Prepared
             end

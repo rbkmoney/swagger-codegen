@@ -127,7 +127,7 @@ public class ErlangServerCodegen extends DefaultCodegen implements CodegenConfig
         supportingFiles.add(new SupportingFile("validation_schema.mustache", "",  toSourceFilePath("validation_schema", "erl")));
         supportingFiles.add(new SupportingFile("schema_validator.mustache", "",  toSourceFilePath("schema_validator", "erl")));
         supportingFiles.add(new SupportingFile("param_validator.mustache", "",  toSourceFilePath("param_validator", "erl")));
-        supportingFiles.add(new SupportingFile("jesse_validator_swagger_2_0.mustache", "",  toSourceFilePath("jesse_validator_swagger_2_0", "erl")));
+        supportingFiles.add(new SupportingFile("handler_utils.mustache", "",  toSourceFilePath("handler_utils", "erl")));
         writeOptional(outputFolder, new SupportingFile("README.mustache", "", "README.md"));
     }
 
