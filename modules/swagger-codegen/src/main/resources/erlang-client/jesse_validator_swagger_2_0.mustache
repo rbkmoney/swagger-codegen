@@ -3,6 +3,7 @@
 -behaviour(jesse_schema_validator).
 
 %% API
+-export([init_state/0]).
 -export([check_value/3]).
 -export([options/0]).
 -export([make_schema_ref/2]).
@@ -15,8 +16,7 @@
     [{validator, module()} | {validator_state, []}].
 options() ->
     [
-        {validator, ?MODULE},
-        {validator_state, []}
+        {validator, ?MODULE}
     ].
 
 -spec make_schema_ref(RefBase, Element) -> Ref when
@@ -25,6 +25,11 @@ options() ->
     Ref     :: string().
 make_schema_ref(RefBase, Element) ->
     RefBase ++ "#/definitions/" ++ Element.
+
+-spec init_state() ->
+    [].
+init_state() ->
+    [].
 
 -spec check_value(Value, Attr, State) ->
     State | no_return()

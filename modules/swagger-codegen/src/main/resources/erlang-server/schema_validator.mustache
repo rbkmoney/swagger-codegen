@@ -6,12 +6,14 @@
 -export([init/0]).
 -export([validate/2]).
 
-%% Behaviour callback
+%% Behaviour callbacks
+-export([init_state/0]).
 -export([check_value/3]).
 
--define(SWAGGER_SCHEMA, "http://swagger.io/schema/{{packageName}}").
+-define(SWAGGER_SCHEMA, "{{basePath}}").
 
 -define(DISCRIMINATOR,  <<"discriminator">>).
+-define(DEFINITIONS,   "definitions").
 -define(REF,            <<"$ref">>).
 -define(NOT_FOUND,      not_found).
 
@@ -23,8 +25,14 @@
 init() ->
     init(?SWAGGER_SCHEMA, get_swagger_schema()).
 
-init(SchemaKey, Schema) ->
-    jesse:add_schema(SchemaKey, Schema, [{parser_fun, fun jsx:decode/1}]).
+init(SchemaKey, BinSchema) ->
+    Schema = parse_schema(BinSchema),
+    jesse:add_schema(SchemaKey, Schema).
+
+-spec init_state() ->
+    [].
+init_state() ->
+    [].
 
 -spec validate(Value, DefName) ->
     ok | {error, Error}
@@ -73,7 +81,7 @@ validate_discriminator(Value, DiscrField, State) when is_binary(DiscrField) ->
     end.
 
 validate_child_schema(Value, SchemaName, State) ->
-    Schema = make_ref_schema(<<"#/definitions/", SchemaName/binary>>),
+    Schema = make_ref_schema(<<"#/" ?DEFINITIONS "/", SchemaName/binary>>),
     jesse_schema_validator:validate_with_state(Schema, Value, State).
 
 validate_ref(Value, Attr = {?REF, Ref} , State) ->
@@ -110,14 +118,22 @@ get_swagger_schema() ->
     {ok, Contents} = file:read_file(Filepath),
     Contents.
 
+parse_schema(BinSchema) ->
+    JsonMap = jsx:decode(BinSchema, [return_maps]),
+    case maps:with([<<?DEFINITIONS>>], JsonMap) of
+        Schema when map_size(Schema) == 0 ->
+            error({schema_invalid, no_definitions});
+        Schema ->
+            Schema
+    end.
+
 options() ->
     [
-        {validator, ?MODULE},
-        {validator_state, []}
+        {validator, ?MODULE}
     ].
 
 make_schema_ref(RefBase, Element) ->
-    RefBase ++ "#/definitions/" ++ Element.
+    RefBase ++ "#/" ?DEFINITIONS "/" ++ Element.
 
 map_error_reason({'data_invalid', _Schema, Error, _Data, Path0}) ->
     Path = get_error_path(Path0),
@@ -126,7 +142,6 @@ map_error_reason({'data_invalid', _Schema, Error, _Data, Path0}) ->
 
 get_error_path([]) ->
     <<"">>;
-
 get_error_path(Path) ->
     PreparedPath = {{packageName}}_utils:join(".", Path),
     <<" Path to item: ", PreparedPath/binary>>.

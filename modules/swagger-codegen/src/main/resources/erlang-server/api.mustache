@@ -28,7 +28,7 @@
     cowboy_req:req()
 ) ->
     {ok, Model :: map(), Req :: cowboy_req:req()} |
-    {error, Reason :: unavailable | binary(), Req :: cowboy_req:req()}.
+    {error, Reason :: binary(), Req :: cowboy_req:req()}.
 
 populate_request(OperationID, Req) ->
     Params = {{packageName}}_validation_schema:request_params(OperationID),
@@ -53,9 +53,7 @@ populate_request_param(OperationID, Name, Req0) ->
                 {ok, Result} ->
                     {ok, Name, Result, Req};
                 {error, Error = #{type := _}}  ->
-                    {error, error_message(Name, Error), Req};
-                {error, Reason} ->
-                    {error, Reason, Req}
+                    {error, error_message(Name, Error), Req}
             end;
         E = {error, _, _} ->
             E

@@ -240,13 +240,6 @@ process_response(Response, Req0, State = #state{operation_id = OperationID}) ->
         {ok, {Code, Headers, Body}} ->
             {ok, Req} = cowboy_req:reply(Code, Headers, Body, Req0),
             {halt, Req, State};
-        {error, unavailable} ->
-            error_logger:warning_msg(
-                "Unable to process request for ~p: validator is unavailable",
-                [OperationID]
-            ),
-            {ok, Req} = cowboy_req:reply(503, Req0),
-            {halt, Req, State};
         {error, Message} ->
             error_logger:info_msg(
                 "Unable to process request for ~p: ~p",

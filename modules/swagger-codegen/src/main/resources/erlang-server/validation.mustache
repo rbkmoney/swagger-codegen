@@ -28,9 +28,7 @@
         {ok, Block}
     catch
         throw:{wrong_param, _Name, Errors} ->
-            {error, Errors};
-        throw:Reason ->
-            {error, Reason}
+            {error, Errors}
     end
 ).
 
@@ -40,7 +38,7 @@
     value()
 ) ->
     {ok, term()} |
-    {error, validation_error() | unavailable}.
+    {error, validation_error()}.
 
 prepare_request_param(Rules, Name, Value) ->
     ?catch_error(validate_param(Rules, Name, Value)).
@@ -50,7 +48,7 @@ prepare_request_param(Rules, Name, Value) ->
     value()
 ) ->
     ok |
-    {error, validation_error() | unavailable}.
+    {error, validation_error()}.
 
 validate_response({DataType, BaseType}, Body) ->
     Result = case DataType of
