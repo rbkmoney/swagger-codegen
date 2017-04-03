@@ -2,57 +2,63 @@
 
 -export([handle_request/4]).
 
+-type response() :: {
+    Status  :: cowboy:http_status(),
+    Headers :: cowboy:http_headers(),
+    Body    :: {{packageName}}:object() | [{{packageName}}:object()] | undefined
+}.
+
+-export_type([response/0]).
+
+
+%% Behaviour definition
+
 {{#authMethods}}
     {{#isApiKey}}
 -export([authorize_api_key/3]).
     {{/isApiKey}}
 {{/authMethods}}
 
--type handler_response() :: {ok | error, {
-    Status  :: cowboy:http_status(),
-    Headers :: cowboy:http_headers(),
-    Body    :: map() | undefined
-}}.
-
--export_type([handler_response/0]).
-
 {{#authMethods}}
     {{#isApiKey}}
 -callback authorize_api_key(
-    OperationID :: {{packageName}}_api:operation_id(),
-    ApiKey      :: {{packageName}}_api:api_key()
+    OperationID :: {{packageName}}:operation_id(),
+    ApiKey      :: {{packageName}}:api_key()
 ) ->
-    Result :: boolean() | {boolean(), {{packageName}}_auth:context()}.
+    Result :: boolean() | {boolean(), {{packageName}}:auth_context()}.
     {{/isApiKey}}
 {{/authMethods}}
 
 
 -callback handle_request(
-    OperationID :: {{packageName}}_api:operation_id(),
-    Request     :: any(),
-    Context     :: {{packageName}}_api:request_context()
+    OperationID :: {{packageName}}:operation_id(),
+    Request     :: {{packageName}}:object(),
+    Context     :: {{packageName}}:request_context()
 ) ->
-    handler_response().
+    {ok | error, response()}.
 
 -spec handle_request(
     Handler     :: module(),
-    OperationID :: {{packageName}}_api:operation_id(),
-    Request     :: any(),
-    Context     :: {{packageName}}_api:request_context()
+    OperationID :: {{packageName}}:operation_id(),
+    Request     :: {{packageName}}:object(),
+    Context     :: {{packageName}}:request_context()
 ) ->
-    handler_response().
+    {ok | error, response()}.
 
-handle_request(Handler, OperationID, Req, Context) ->
-    Handler:handle_request(OperationID, Req, Context).
+
+%% API
+
+handle_request(Handler, OperationID, Request, Context) ->
+    Handler:handle_request(OperationID, Request, Context).
 
 {{#authMethods}}
     {{#isApiKey}}
 -spec authorize_api_key(
-    Handler     :: atom(),
-    OperationID :: {{packageName}}_api:operation_id(),
-    ApiKey      :: {{packageName}}_api:api_key()
+    Handler     :: module(),
+    OperationID :: {{packageName}}:operation_id(),
+    ApiKey      :: {{packageName}}:api_key()
 ) ->
-    Result :: false | {true, {{packageName}}_auth:context()}.
+    Result :: false | {true, {{packageName}}:auth_context()}.
 authorize_api_key(Handler, OperationID, ApiKey) ->
     Handler:authorize_api_key(OperationID, ApiKey).
     {{/isApiKey}}

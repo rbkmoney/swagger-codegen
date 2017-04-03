@@ -12,12 +12,12 @@
 
 -define(SWAGGER_SCHEMA, "{{basePath}}").
 
--define(DISCRIMINATOR,  <<"discriminator">>).
+-define(DISCRIMINATOR, <<"discriminator">>).
 -define(DEFINITIONS,   "definitions").
--define(REF,            <<"$ref">>).
--define(NOT_FOUND,      not_found).
+-define(REF,           <<"$ref">>).
+-define(NOT_FOUND,     not_found).
 
--type error_reason() :: binary().
+-define(DISCR_ERROR(Error), {discriminator_not_valid, Error}).
 
 %%
 -spec init() ->
@@ -26,7 +26,7 @@ init() ->
     init(?SWAGGER_SCHEMA, get_swagger_schema()).
 
 init(SchemaKey, BinSchema) ->
-    Schema = parse_schema(BinSchema),
+    Schema = {{packageName}}_schema_validator_util:fix_discriminators(parse_schema(BinSchema)),
     jesse:add_schema(SchemaKey, Schema).
 
 -spec init_state() ->
@@ -34,12 +34,9 @@ init(SchemaKey, BinSchema) ->
 init_state() ->
     [].
 
--spec validate(Value, DefName) ->
-    ok | {error, Error}
-when
-    Value   :: {{packageName}}_validation:value(),
-    DefName :: {{packageName}}_validation_schema:param_name(),
-    Error   :: [error_reason()].
+-spec validate(Value :: {{packageName}}:value(), DefName :: {{packageName}}:param_name()) ->
+    ok | {error, Error :: {{packageName}}:error_reason()}.
+
 validate(Value, DefName) ->
     validate(Value, DefName, ?SWAGGER_SCHEMA).
 
@@ -48,17 +45,18 @@ validate(Value, DefName, SchemaKey) ->
     case jesse:validate_ref(make_schema_ref(SchemaKey, Name), Value, options()) of
         {ok, _} ->
             ok;
-        {error, Errors} when is_list(Errors) ->
-            Reasons = [map_error_reason(E) || E <- Errors],
-            {error, Reasons}
+        {error, [Error]} ->
+            {error, map_error_reason(Error)}
     end.
 
--spec check_value(Value, Attr, State) ->
-    State | no_return()
-when
+-spec check_value(
     Value :: any(),
     Attr  :: {binary(), jesse:json_term()},
-    State :: jesse_state:state().
+    State :: jesse_state:state()
+) ->
+    State :: jesse_state:state() |
+    no_return().
+
 check_value(Value, {?DISCRIMINATOR, DiscrField}, State) ->
     case jesse_lib:is_json_object(Value) of
         true  -> validate_discriminator(Value, DiscrField, State);
@@ -81,8 +79,14 @@ validate_discriminator(Value, DiscrField, State) when is_binary(DiscrField) ->
     end.
 
 validate_child_schema(Value, SchemaName, State) ->
-    Schema = make_ref_schema(<<"#/" ?DEFINITIONS "/", SchemaName/binary>>),
-    jesse_schema_validator:validate_with_state(Schema, Value, State).
+    Ref    = <<"#/" ?DEFINITIONS "/", SchemaName/binary>>,
+    BadRef = {{packageName}}_utils:to_list(Ref),
+    Schema = make_ref_schema(Ref),
+    try jesse_schema_validator:validate_with_state(Schema, Value, State)
+    catch
+        throw:[{schema_invalid, _Schema, {schema_not_found, BadRef}}] ->
+            jesse_error:handle_data_invalid(?DISCR_ERROR(SchemaName), Value, State)
+    end.
 
 validate_ref(Value, Attr = {?REF, Ref} , State) ->
     Path = jesse_state:get_current_path(State),
@@ -128,9 +132,7 @@ parse_schema(BinSchema) ->
     end.
 
 options() ->
-    [
-        {validator, ?MODULE}
-    ].
+    [{validator, ?MODULE}, {allowed_errors, 0}].
 
 make_schema_ref(RefBase, Element) ->
     RefBase ++ "#/" ?DEFINITIONS "/" ++ Element.
@@ -179,7 +181,9 @@ get_error_description(wrong_length) ->
 get_error_description(wrong_size) ->
     <<"Wrong size">>;
 get_error_description(wrong_type) ->
-    <<"Wrong type">>.
+    <<"Wrong type">>;
+get_error_description(?DISCR_ERROR(SchemaName)) ->
+    <<"Discriminator child schema ", SchemaName/binary, " doesn't exist">>.
 
 
 -ifdef(TEST).
@@ -191,9 +195,9 @@ get_error_description(wrong_type) ->
          \"type\":          \"object\",
          \"discriminator\": \"type\",
          \"properties\": {
-            \"name\":    {\"type\": \"string\"},
-            \"owner\":   {\"$ref\": \"#/definitions/Owner\"},
-            \"petType\": {\"type\": \"string\"}
+            \"name\":  {\"type\": \"string\"},
+            \"owner\": {\"$ref\": \"#/definitions/Owner\"},
+            \"type\":  {\"type\": \"string\"}
          },
          \"required\": [\"name\", \"type\"]
        },
@@ -320,7 +324,11 @@ get_error_description(wrong_type) ->
 -define(PRED_SCHEMA,
   <<"{\"definitions\": {
        \"Predicate\": {
-         \"discriminator\": \"type\"
+         \"discriminator\": \"type\",
+         \"properties\": {
+            \"type\": {\"type\": \"string\"}
+         },
+         \"required\": [\"type\"]
        },
        \"Constant\": {
          \"allOf\": [
@@ -367,7 +375,7 @@ test_validate(Value, DefName, SchemaKey) ->
     end.
 
 expect(Error, Path) ->
-    [map_error_reason({data_invalid, undefined, Error, undefined, Path})].
+    map_error_reason({data_invalid, undefined, Error, undefined, Path}).
 
 %% Test cases
 -spec test() -> _.

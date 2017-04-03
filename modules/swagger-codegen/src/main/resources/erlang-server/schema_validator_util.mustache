@@ -1,0 +1,208 @@
+-module({{packageName}}_schema_validator_util).
+
+-export([fix_discriminators/1]).
+
+-spec fix_discriminators(Schema :: map()) ->
+    Schema :: map() | no_return().
+fix_discriminators(Schema = #{<<"definitions">> := Defs}) ->
+    try
+        {Parents, _} = maps:fold(fun check_definition/3, {#{}, #{}}, Defs),
+        maps:fold(fun correct_schema/3, Schema, Parents)
+    catch
+        _:Error ->
+            handle_error(Error)
+    end;
+fix_discriminators(_) ->
+    handle_error(no_definitions).
+
+-spec handle_error(_) ->
+    no_return().
+handle_error(Error) ->
+    erlang:error({schema_invalid, Error}).
+
+check_definition(Name, Schema, Acc) ->
+    Acc1 = check_discriminator(Name, Schema, Acc),
+    check_backrefs(Name, Schema, Acc1).
+
+check_discriminator(Name, Schema, {Parents, Candidates}) ->
+    case maps:get(<<"discriminator">>, Schema, undefined) of
+        undefined ->
+            {Parents, Candidates};
+        _ ->
+            {
+                Parents#{Name => maps:get(Name, Candidates, [])},
+                maps:without([Name], Candidates)
+            }
+    end.
+
+check_backrefs(Name, Schema, Acc) ->
+    case maps:get(<<"allOf">>, Schema, undefined) of
+        undefined ->
+            Acc;
+        AllOf ->
+            lists:foldl(fun(E, A) -> check_allOf(E, Name, A) end, Acc, AllOf)
+    end.
+
+check_allOf(#{<<"$ref">> := <<"#/definitions/", Parent/binary>>}, Child, {Parents, Candidates}) ->
+    case maps:get(Parent, Parents, undefined) of
+        undefined ->
+            {Parents, update_candidates(Parent, Child, Candidates)};
+        Children ->
+            {Parents#{Parent => [Child | Children]}, Candidates}
+    end;
+check_allOf(_, _, Acc) ->
+    Acc.
+
+update_candidates(Parent, Child, Candidates) ->
+    case maps:get(Parent, Candidates, undefined) of
+        undefined ->
+            Candidates#{Parent => [Child]};
+        Children ->
+            Candidates#{Parent => [Child | Children]}
+    end.
+
+correct_schema(Parent, Children, Schema) ->
+    BasePath = [Parent, <<"definitions">>],
+    Discr    = maps:get(<<"discriminator">>, get_sub_schema(BasePath, Schema)),
+    update_schema(Children, [<<"enum">>, Discr, <<"properties">> | BasePath], Schema).
+
+update_schema(Value, [], _Schema) ->
+    Value;
+update_schema(Value, [Key | Path], Schema) ->
+    SubSchema0 = get_sub_schema(Path, Schema),
+    SubSchema1 = update_sub_schema(Key, Value, SubSchema0),
+    update_schema(SubSchema1, Path, Schema).
+
+get_sub_schema(ReversedPath, Schema) ->
+    lists:foldr(fun(K, S) -> maps:get(K, S) end, Schema, ReversedPath).
+
+update_sub_schema(Key, Value, Schema) ->
+    Schema#{Key => Value}.
+
+
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+
+-define(SCHEMA,
+  <<"{\"definitions\": {
+       \"Pet\": {
+         \"type\":          \"object\",
+         \"discriminator\": \"type\",
+         \"properties\": {
+            \"name\": {\"type\": \"string\"},
+            \"type\": {\"type\": \"string\"}
+         },
+         \"required\": [\"name\", \"type\"]
+       },
+       \"Cat\": {
+         \"description\": \"A representation of a cat\",
+         \"allOf\": [
+           {\"$ref\": \"#/definitions/Pet\"},
+           {
+             \"type\":       \"object\",
+             \"properties\": {
+               \"huntingSkill\": {
+                 \"type\":        \"string\",
+                 \"description\": \"The measured skill for hunting\",
+                 \"default\":     \"lazy\",
+                 \"enum\":        [\"clueless\", \"lazy\", \"adventurous\", \"aggressive\"]
+               }
+             },
+             \"required\": [\"huntingSkill\"]
+           }
+         ]
+       },
+       \"Dog\": {
+         \"description\": \"A representation of a dog\",
+         \"allOf\": [
+           {\"$ref\": \"#/definitions/Pet\"},
+           {
+             \"type\":       \"object\",
+             \"properties\": {
+               \"packSize\": {
+                 \"type\":        \"integer\",
+                 \"format\":      \"int32\",
+                 \"description\": \"the size of the pack the dog is from\",
+                 \"default\":     0,
+                 \"minimum\":     0
+               }
+             }
+           }
+         ],
+         \"required\": [\"packSize\"]
+       },
+       \"Owner\": {
+         \"type\":          \"object\",
+         \"discriminator\": \"type\",
+         \"properties\": {
+            \"soleOwner\": {\"type\": \"boolean\"},
+            \"type\": {\"type\": \"string\"}
+         },
+         \"required\": [\"soleOwner\", \"type\"]
+       },
+       \"Family\": {
+         \"allOf\": [
+           {\"$ref\": \"#/definitions/Owner\"},
+           {
+             \"type\":       \"object\",
+             \"properties\": {
+               \"members\": {
+                 \"type\":  \"array\",
+                 \"items\": {\"$ref\": \"#/definitions/Person\"},
+                 \"minItems\": 1
+               }
+             },
+             \"required\": [\"members\"]
+           }
+         ]
+       },
+       \"Person\": {
+         \"allOf\": [
+           {\"$ref\": \"#/definitions/Owner\"},
+           {
+             \"type\":       \"object\",
+             \"properties\": {
+               \"name\": {\"type\": \"string\"},
+               \"age\":  {
+                 \"type\":    \"integer\",
+                 \"minimum\": 0,
+                 \"maximum\": 150
+               },
+               \"sex\": {
+                 \"type\": \"string\",
+                 \"enum\": [\"male\", \"female\"]
+               },
+               \"legalStatus\": {\"$ref\": \"#/definitions/LegalStatus\"}
+             },
+             \"required\": [\"age\", \"sex\"]
+           }
+         ]
+       },
+       \"LegalStatus\": {
+         \"type\":          \"object\",
+         \"discriminator\": \"status\",
+         \"properties\": {
+            \"status\": {\"type\": \"string\"}
+         },
+         \"required\": [\"status\"]
+       },
+       \"WildMix\": {
+         \"allOf\": [
+           {\"$ref\": \"#/definitions/Cat\"},
+           {\"$ref\": \"#/definitions/Person\"}
+         ]
+       }
+     }}">>).
+
+get_enum(Parent, Discr, Schema) ->
+    lists:sort(get_sub_schema([<<"enum">>, Discr, <<"properties">>, Parent, <<"definitions">>], Schema)).
+
+-spec test() -> _.
+-spec fix_discriminators_test() -> _.
+fix_discriminators_test() ->
+    Schema      = jsx:decode(?SCHEMA, [return_maps]),
+    FixedSchema = fix_discriminators(Schema),
+    ?assertEqual(lists:sort([<<"Dog">>, <<"Cat">>]),       get_enum(<<"Pet">>,         <<"type">>,   FixedSchema)),
+    ?assertEqual(lists:sort([<<"Family">>, <<"Person">>]), get_enum(<<"Owner">>,       <<"type">>,   FixedSchema)),
+    ?assertEqual([],                                       get_enum(<<"LegalStatus">>, <<"status">>, FixedSchema)).
+-endif.

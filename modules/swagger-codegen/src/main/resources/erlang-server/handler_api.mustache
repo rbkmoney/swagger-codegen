@@ -1,0 +1,218 @@
+-module({{packageName}}_handler_api).
+
+-export([authorize_api_key/5]).
+-export([determine_peer/1]).
+-export([populate_request/2]).
+-export([validate_response/2]).
+-export([encode_response/1]).
+-export([process_response/4]).
+
+%%
+-type param_source() ::
+    qs_val  |
+    binding |
+    header  |
+    body.
+
+-type request_spec() :: [
+    {
+        {{packageName}}:param_name(),
+        #{source := param_source(), rules := [{{packageName}}_validation:rule()]}
+    }].
+
+-type response_spec() :: {{packageName}}_validation:response_spec().
+
+-export_type([param_source/0]).
+-export_type([request_spec/0]).
+-export_type([response_spec/0]).
+
+-type response() :: {cowboy:http_status(), cowboy:http_headers(), binary()}.
+
+%% API
+
+-spec authorize_api_key(
+    LogicHandler :: module(),
+    OperationID  :: {{packageName}}:operation_id(),
+    From         :: header | qs_val,
+    KeyParam     :: iodata() | atom(),
+    Req          :: cowboy_req:req()
+)->
+    {true,  Context    :: {{packageName}}:auth_context(), Req ::cowboy_req:req()} |
+    {false, AuthHeader :: binary(),                       Req ::cowboy_req:req()}.
+
+authorize_api_key(LogicHandler, OperationID, From, KeyParam, Req0) ->
+    {ok, ApiKey, Req} = get_value(From, KeyParam, Req0),
+    case ApiKey of
+        undefined ->
+            AuthHeader = <<"">>,
+            {false, AuthHeader, Req};
+        _ ->
+            Result = {{packageName}}_logic_handler:authorize_api_key(
+                LogicHandler,
+                OperationID,
+                ApiKey
+            ),
+            case Result of
+                {true, Context}  ->
+                    {true, Context, Req};
+                false ->
+                    AuthHeader = <<"">>,
+                    {false, AuthHeader, Req}
+            end
+    end.
+
+-spec determine_peer(Req :: cowboy_req:req()) ->
+    {
+        {ok, Peer :: {{packageName}}:client_peer()} | {error, Reason :: malformed | einval},
+        Req :: cowboy_req:req()
+    }.
+
+determine_peer(Req) ->
+    {Peer, Req1}  = cowboy_req:peer(Req),
+    {Value, Req2} = cowboy_req:header(<<"x-forwarded-for">>, Req1),
+    {determine_peer_from_header(Value, Peer), Req2}.
+
+-spec populate_request(Spec :: request_spec(), Req :: cowboy_req:req()) ->
+    {ok,    Populated :: {{packageName}}:object(),       Req :: cowboy_req:req()} |
+    {error, Message   :: {{packageName}}:error_reason(), Req :: cowboy_req:req()}.
+
+populate_request(Spec, Req) ->
+    populate_request(Spec, Req, #{}).
+
+-spec validate_response(
+    Spec     :: response_spec(),
+    RespBody :: {{packageName}}:object() | [{{packageName}}:object()] | undefined
+) ->
+    ok | no_return().
+
+validate_response(Spec, RespBody) ->
+    case {{packageName}}_validation:validate_response(Spec, RespBody) of
+        ok ->
+            ok;
+        {error, Error} ->
+            erlang:error({response_validation_failed, Error})
+    end.
+
+-spec encode_response(Resp :: {{packageName}}_logic_handler:response()) ->
+    Encoded :: response().
+
+encode_response({Code, Headers, Body0}) ->
+    Body = case Body0 of
+        undefined -> <<>>;
+        _ -> jsx:encode(Body0)
+    end,
+    {Code, Headers, Body}.
+
+-spec process_response(
+    Status      :: ok | error,
+    Result      :: response() | {{packageName}}:error_reason(),
+    Req         :: cowboy_req:req(),
+    OperationID :: {{packageName}}:operation_id()
+) ->
+    Req :: cowboy_req:req().
+
+process_response(ok, {Code, Headers, Body}, Req0, _) ->
+    {ok, Req} = cowboy_req:reply(Code, Headers, Body, Req0),
+    Req;
+process_response(error, Message, Req0, OperationID) ->
+    error_logger:info_msg(
+        "Unable to process request for ~p: ~ts",
+        [OperationID, Message]
+    ),
+    {ok, Req} = cowboy_req:reply(400, [], Message, Req0),
+    Req.
+
+
+%% Internal
+
+populate_request([], Req, Populated) ->
+    {ok, Populated, Req};
+populate_request([ParamSpec | T], Req0, Populated) ->
+    case populate_request_param(ParamSpec, Req0) of
+        {ok, K, V, Req} ->
+            populate_request(T, Req, maps:put(K, V, Populated));
+        Error ->
+            Error
+    end.
+
+populate_request_param({Name, #{rules := Rules, source := Source}}, Req0) ->
+    case get_value(Source, Name, Req0) of
+        {ok, Value, Req} ->
+            case {{packageName}}_validation:prepare_request_param(Rules, Name, Value) of
+                {ok, Result} ->
+                    {ok, Name, Result, Req};
+                {error, Error}  ->
+                    {error, error_message(Name, Error), Req}
+            end;
+        E = {error, _, _} ->
+            E
+    end.
+
+-spec error_message(Name :: {{packageName}}:param_name(), Error :: {{packageName}}_validation:error()) ->
+    Message :: {{packageName}}:error_reason().
+error_message(Name, Error = #{type := Type}) ->
+    jsx:encode(#{
+        <<"name">>        => {{packageName}}_utils:to_binary(Name),
+        <<"errorType">>   => {{packageName}}_utils:to_binary(Type),
+        <<"description">> => maps:get(description, Error, <<>>)
+    }).
+
+determine_peer_from_header(undefined, {IP, Port}) ->
+    % undefined, assuming no proxies were involved
+    {ok, #{ip_address => IP, port_number => Port}};
+determine_peer_from_header(Value, _Peer) when is_binary(Value) ->
+    ClientPeer = string:strip(binary_to_list(Value)),
+    case string:tokens(ClientPeer, ", ") of
+        [ClientIP | _Proxies] ->
+            case inet:parse_strict_address(ClientIP) of
+                {ok, IP} ->
+                    % ok
+                    {ok, #{ip_address => IP}};
+                Error ->
+                    % unparseable ip address
+                    Error
+            end;
+        _ ->
+            % empty or malformed value
+            {error, malformed}
+    end.
+
+-spec get_value(
+    Source :: param_source(),
+    Name   :: {{packageName}}:param_name(),
+    Req    :: cowboy_req:req()
+) ->
+    {ok,    Value   :: {{packageName}}:value(),        Req :: cowboy_req:req()} |
+    {error, Message :: {{packageName}}:error_reason(), Req :: cowboy_req:req()}.
+
+get_value(body, _Name, Req0) ->
+    {ok, Body, Req} = cowboy_req:body(Req0),
+    case decode_body(Body) of
+        {ok, Value} ->
+            {ok, Value, Req};
+        {error, Message} ->
+            {error, Message, Req}
+    end;
+get_value(qs_val, Name, Req0) ->
+    {QS, Req} = cowboy_req:qs_vals(Req0),
+    Value     = {{packageName}}_utils:get_opt({{packageName}}_utils:to_qs(Name), QS),
+    {ok, Value, Req};
+get_value(header, Name, Req0) ->
+    {Headers, Req} = cowboy_req:headers(Req0),
+    Value          = {{packageName}}_utils:get_opt({{packageName}}_utils:to_header(Name), Headers),
+    {ok, Value, Req};
+get_value(binding, Name, Req0) ->
+    {Bindings, Req} = cowboy_req:bindings(Req0),
+    Value           = {{packageName}}_utils:get_opt({{packageName}}_utils:to_binding(Name), Bindings),
+    {ok, Value, Req}.
+
+-spec decode_body(Body :: binary()) ->
+    {ok,    Decoded :: {{packageName}}:object()} |
+    {error, Message :: {{packageName}}:error_reason()}.
+decode_body(Body) ->
+    try
+        {ok, jsx:decode(Body, [return_maps])}
+    catch
+        _:_ ->
+            {error, <<"Invalid json">>}
+    end.

@@ -3,7 +3,7 @@
 -export([get_paths/1]).
 
 -type operations() :: #{
-    Method :: binary() => {{packageName}}_api:operation_id()
+    Method :: binary() => OperationID :: {{packageName}}:operation_id()
 }.
 
 -type init_opts()  :: {
