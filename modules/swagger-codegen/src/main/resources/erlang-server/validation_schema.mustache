@@ -10,7 +10,7 @@
     binding |
     header  |
     body.
--type param_rule() ::
+-type param_base_rule() ::
     {type, 'binary'} |
     {type, 'byte'} |
     {type, 'int32'} |
@@ -26,6 +26,14 @@
     {min_length, MaxLength :: integer()} |
     {pattern, Pattern :: string()} |
     {required, boolean()}.
+-type collection_format() ::
+    'csv' |
+    'ssv' |
+    'tsv' |
+    'pipes'.
+-type param_rule() ::
+    param_base_rule() |
+    {'list', collection_format(), [param_base_rule()]}.
 
 -type rule() ::
     schema |
@@ -34,6 +42,8 @@
 -export_type([param_name/0]).
 -export_type([param_source/0]).
 -export_type([param_rule/0]).
+-export_type([param_base_rule/0]).
+-export_type([collection_format/0]).
 -export_type([rule/0]).
 
 -type http_code() :: pos_integer().

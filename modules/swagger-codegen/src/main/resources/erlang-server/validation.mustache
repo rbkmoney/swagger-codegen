@@ -15,7 +15,8 @@
     wrong_length |
     wrong_size |
     schema_violated |
-    wrong_type.
+    wrong_type |
+    wrong_array.
 
 -type value() :: term().
 
@@ -72,15 +73,6 @@ validate_response(undefined, _) ->
         type => schema_violated,
         description => <<"Must be empty">>
     }.
-
-validate(Rule = {'list', Format, Ruleset}, Name, Value) ->
-    try
-        Values = parse_collection_value(Format, Value),
-        {ok, [validate_param(Ruleset, Name, V) || V <- Values]}
-    catch
-        error:badarg ->
-            report_validation_error(Rule, Name)
-    end;
 
 validate(Rule = schema, Name, Value) ->
     case {{packageName}}_schema_validator:validate(Value, Name) of
@@ -157,22 +149,5 @@ map_violated_rule({max_length, _}) ->  wrong_length;
 map_violated_rule({min_length, _}) ->  wrong_length;
 map_violated_rule({pattern, _}) ->  no_match;
 map_violated_rule(schema) ->  schema_violated;
-map_violated_rule({required, _}) ->  not_found.
-
--spec parse_collection_value(
-    Format     :: 'csv' | 'ssv' | 'tsv' | 'pipes',
-    Collection :: binary()
-) ->
-    Values :: [binary()].
-
-parse_collection_value(Format, Collection) ->
-    binary:split(Collection, get_split_pattern(Format), [global]).
-
-get_split_pattern('csv') ->
-    <<",">>;
-get_split_pattern('ssv') ->
-    <<" ">>;
-get_split_pattern('tsv') ->
-    <<"\t">>;
-get_split_pattern('pipes') ->
-    <<"|">>.
+map_violated_rule({required, _}) ->  not_found;
+map_violated_rule({list, _, _}) ->  wrong_array.
