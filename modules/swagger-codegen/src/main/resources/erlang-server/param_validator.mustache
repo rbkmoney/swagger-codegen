@@ -17,6 +17,15 @@ validate({required, Req}, Value) ->
 validate(_,  undefined) ->
     ok;
 
+validate({'list', Format, Ruleset}, Value) ->
+    try
+        Values = parse_array(Format, Value),
+        {ok, [validate_ruleset(Ruleset, V) || V <- Values]}
+    catch
+        _:_ ->
+            error
+    end;
+
 validate({type, 'int64'}, Value0) ->
     try
         Value = {{packageName}}_utils:to_int(Value0),
@@ -187,6 +196,42 @@ validate_datetime(Value) when is_binary(Value) ->
             error
     end.
 
+-spec validate_ruleset(
+    Ruleset :: [{{packageName}}_validation_schema:param_base_rule()],
+    Value   :: {{packageName}}_validation:value()
+) ->
+    Value   :: {{packageName}}_validation:value().
+
+validate_ruleset(Ruleset, Value) ->
+    lists:foldl(
+        fun(R, V0) ->
+            case validate(R, Value) of
+                {ok, V} -> V;
+                ok -> V0;
+                error -> throw(wrong_param)
+            end
+        end,
+        Value,
+        Ruleset
+    ).
+
+-spec parse_array(
+    Format :: {{packageName}}_validation_schema:collection_format(),
+    Array  :: binary()
+) ->
+    Values :: [binary()].
+
+parse_array(Format, Array) ->
+    binary:split(Array, get_split_pattern(Format), [global]).
+
+get_split_pattern('csv') ->
+    <<",">>;
+get_split_pattern('ssv') ->
+    <<" ">>;
+get_split_pattern('tsv') ->
+    <<"\t">>;
+get_split_pattern('pipes') ->
+    <<"|">>.
 
 -ifdef(TEST).
 
@@ -208,6 +253,7 @@ validate_datetime(Value) when is_binary(Value) ->
 -spec validate_max_length_test() -> _.
 -spec validate_min_length_test() -> _.
 -spec validate_pattern_test() -> _.
+-spec validate_array_test() -> _.
 
 validate_required_test() ->
     ?assertEqual(ok, validate({required, true}, <<"test">>)),
@@ -290,5 +336,11 @@ validate_pattern_test() ->
     ?assertEqual(error, validate({pattern, <<"[abc]">>},  <<"fgh0">>)),
     ?assertEqual(ok, validate({pattern, <<"^[0-9]{2}\/[0-9]{2}$">>}, <<"22/22">>)),
     ?assertEqual(error, validate({pattern, <<"^[0-9]{2}\/[0-9]{2}$">>}, <<"22/225">>)).
+
+validate_array_test() ->
+    ?assertEqual({ok, [10,11,12]}, validate({list, 'csv', [{type, 'int32'}, {required, false}]}, <<"10,11,12">>)),
+    ?assertEqual(ok, validate({list, 'csv', [{type, 'int32'}, {required, false}]}, undefined)),
+    ?assertEqual(ok, validate({list, 'csv', [{type, 'int32'}, {required, true}]}, undefined)),
+    ?assertEqual(error, validate({list, 'csv', [{type, 'int32'}, {required, false}]}, <<"10,xyi,12">>)).
 
 -endif.
