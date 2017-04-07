@@ -2,7 +2,7 @@
 
 -export([validate/2]).
 
--type param_rule() ::
+-type param_base_rule() ::
     {type, 'binary'} |
     {type, 'byte'} |
     {type, 'int32'} |
@@ -18,6 +18,14 @@
     {min_length, MaxLength :: integer()} |
     {pattern, Pattern :: string()} |
     {required, boolean()}.
+-type collection_format() ::
+    'csv' |
+    'ssv' |
+    'tsv' |
+    'pipes'.
+-type param_rule() ::
+    param_base_rule() |
+    {'list', collection_format(), [param_base_rule()]}.
 
 -export_type([param_rule/0]).
 
@@ -223,10 +231,10 @@ validate_datetime(Value) when is_binary(Value) ->
     end.
 
 -spec validate_ruleset(
-    Ruleset :: [{{packageName}}_validation_schema:param_base_rule()],
-    Value   :: {{packageName}}_validation:value()
+    Ruleset :: [param_base_rule()],
+    Value   :: {{packageName}}:value()
 ) ->
-    Value   :: {{packageName}}_validation:value().
+    Value   :: {{packageName}}:value().
 
 validate_ruleset(Ruleset, Value) ->
     lists:foldl(
@@ -242,7 +250,7 @@ validate_ruleset(Ruleset, Value) ->
     ).
 
 -spec parse_array(
-    Format :: {{packageName}}_validation_schema:collection_format(),
+    Format :: collection_format(),
     Array  :: binary()
 ) ->
     Values :: [binary()].
