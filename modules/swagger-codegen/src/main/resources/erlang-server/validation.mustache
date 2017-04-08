@@ -10,7 +10,7 @@
 -type error() :: #{
     type        := error_type(),
     description => {{packageName}}:error_reason()
-}.
+} | validator_unavailable.
 
 -type error_type() ::
     no_match        |
@@ -31,8 +31,8 @@
     try
         {ok, Block}
     catch
-        throw:{wrong_param, _Name, Errors} ->
-            {error, Errors}
+        throw:{wrong_param, _Name, Error} ->
+            {error, Error}
     end
 ).
 
@@ -130,7 +130,8 @@ report_validation_error(Rule, Param, Description) ->
 
 -spec map_error(Rule :: rule(), Description :: {{packageName}}:error_reason() | undefined) ->
    Error :: error().
-
+map_error(schema, Description = validator_unavailable) ->
+    Description;
 map_error(Rule, Description) ->
     Error = #{type => map_violated_rule(Rule)},
     case Description of

@@ -74,7 +74,8 @@ determine_peer(Req) ->
 
 -spec populate_request(Spec :: request_spec(), Req :: cowboy_req:req()) ->
     {ok,    Populated :: {{packageName}}:object(),       Req :: cowboy_req:req()} |
-    {error, Message   :: {{packageName}}:error_reason(), Req :: cowboy_req:req()}.
+    {error, Message   :: {{packageName}}:error_reason(), Req :: cowboy_req:req()} |
+    {error, Reason    :: validator_unavailable,          Req :: cowboy_req:req()}.
 
 populate_request(Spec, Req) ->
     populate_request(Spec, Req, #{}).
@@ -105,7 +106,7 @@ encode_response({Code, Headers, Body0}) ->
 
 -spec process_response(
     Status      :: ok | error,
-    Result      :: response() | {{packageName}}:error_reason(),
+    Result      :: response() | {{packageName}}:error_reason() | validator_unavailable,
     Req         :: cowboy_req:req(),
     OperationID :: {{packageName}}:operation_id()
 ) ->
@@ -113,6 +114,13 @@ encode_response({Code, Headers, Body0}) ->
 
 process_response(ok, {Code, Headers, Body}, Req0, _) ->
     {ok, Req} = cowboy_req:reply(Code, Headers, Body, Req0),
+    Req;
+process_response(error, validator_unavailable, Req0, OperationID) ->
+    error_logger:warning_msg(
+        "Unable to process request for ~p: validator is unavailable",
+        [OperationID]
+    ),
+    {ok, Req} = cowboy_req:reply(503, Req0),
     Req;
 process_response(error, Message, Req0, OperationID) ->
     error_logger:info_msg(
@@ -141,6 +149,8 @@ populate_request_param({Name, #{rules := Rules, source := Source}}, Req0) ->
             case {{packageName}}_validation:prepare_request_param(Rules, Name, Value) of
                 {ok, Result} ->
                     {ok, Name, Result, Req};
+                {error, validator_unavailable} ->
+                    {error, validator_unavailable, Req};
                 {error, Error}  ->
                     {error, error_message(Name, Error), Req}
             end;
