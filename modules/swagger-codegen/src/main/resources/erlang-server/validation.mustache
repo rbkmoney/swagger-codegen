@@ -48,7 +48,7 @@
     {error, Error :: error()}.
 
 prepare_request_param(Rules, Name, Value) ->
-    ?catch_error(validate_param(Rules, Name, Value)).
+    ?catch_error(validate_param(Rules, Name, Value, request)).
 
 -spec validate_response(
     Spec :: response_spec(),
@@ -60,9 +60,9 @@ prepare_request_param(Rules, Name, Value) ->
 validate_response({DataType, SchemaName}, Body) ->
     Result = case DataType of
         'list' ->
-            ?catch_error([validate(schema, SchemaName, Item) || Item <- Body]);
+            ?catch_error([validate(schema, SchemaName, Item, response) || Item <- Body]);
         _ ->
-            ?catch_error(validate(schema, SchemaName, Body))
+            ?catch_error(validate(schema, SchemaName, Body, response))
     end,
     case Result of
         E = {error, _} -> E;
@@ -79,14 +79,15 @@ validate_response(undefined, _) ->
 -spec validate_param(
     Rules :: [rule()],
     Name  :: {{packageName}}:param_name(),
-    Value :: {{packageName}}:value()
+    Value :: {{packageName}}:value(),
+    Type  :: {{packageName}}_schema_validator:type()
 ) ->
     Prepared :: {{packageName}}:value() | no_return().
 
-validate_param(Rules, Name, Value) ->
+validate_param(Rules, Name, Value, Type) ->
     lists:foldl(
         fun(Rule, Acc) ->
-            case validate(Rule, Name, Acc) of
+            case validate(Rule, Name, Acc, Type) of
                 ok             -> Acc;
                 {ok, Prepared} -> Prepared
             end
@@ -95,14 +96,14 @@ validate_param(Rules, Name, Value) ->
         Rules
     ).
 
-validate(Rule = schema, Name, Value) ->
-    case {{packageName}}_schema_validator:validate(Value, Name) of
+validate(Rule = schema, Name, Value, Type) ->
+    case {{packageName}}_schema_validator:validate(Type, Value, Name) of
         ok ->
             ok;
         {error, Reason} ->
             report_validation_error(Rule, Name, Reason)
     end;
-validate(Rule, Name, Value) ->
+validate(Rule, Name, Value, _Type) ->
     case {{packageName}}_param_validator:validate(Rule, Value) of
         ok ->
             ok;

@@ -3,9 +3,9 @@
 -behaviour(gen_server).
 
 %% API
--export([child_spec/1]).
+-export([child_spec/2]).
 -export([start_link/1]).
--export([validate/2]).
+-export([validate/3]).
 
 %% gen_server behaviour callbacks
 -export([init/1]).
@@ -17,6 +17,8 @@
 
 -export_type([pool_options/0]).
 -export_type([raw_schema/0]).
+-export_type([params/0]).
+-export_type([type/0]).
 
 -type pool_options() :: #{
     max_count            => non_neg_integer(),
@@ -26,15 +28,16 @@
     member_start_timeout => pool_time_interval()
 }.
 -type raw_schema() :: {{packageName}}_schema_validator_worker:raw_schema().
+-type params() :: #{
+    req_validator_pool_opts  => pool_options(),
+    resp_validator_pool_opts => pool_options(),
+    swagger_schema           => raw_schema()
+}.
+-type type() :: request | response.
 
 -type pool_time_interval() :: {non_neg_integer(), min | sec | ms}.
--type params() :: #{
-    validator_pool_opts => pool_options(),
-    swagger_schema      => raw_schema()
-}.
 -type state()     :: {{packageName}}_schema_validator_worker:schema().
 -type init_data() :: raw_schema() | undefined.
-
 
 -define(DEFAULT_POOL_OPTIONS, #{
     init_count => 1,
@@ -45,16 +48,19 @@
 
 %%
 
--spec child_spec(Params :: params()) ->
+-spec child_spec(Type :: type(), Params :: params()) ->
     ChildSpec :: supervisor:child_spec().
 
-child_spec(Params) ->
+child_spec(request, Params) ->
+    PoolOpts = maps:get(req_validator_pool_opts, Params, #{}),
+    child_spec_(PoolOpts#{name => construct_pool_name(request)}, Params);
+child_spec(response, Params) ->
+    PoolOpts = maps:get(resp_validator_pool_opts, Params, #{}),
+    child_spec_(PoolOpts#{name => construct_pool_name(response)}, Params).
+
+child_spec_(PoolOpts0, Params) ->
     Schema    = maps:get(swagger_schema, Params, undefined),
-    PoolOpts0 = maps:get(validator_pool_opts, Params, #{}),
-    PoolOpts1 = PoolOpts0#{
-        start_mfa => {?MODULE, start_link, [Schema]},
-        name      => construct_pool_name()
-    },
+    PoolOpts1 = PoolOpts0#{start_mfa => {?MODULE, start_link, [Schema]}},
     pooler:pool_child_spec(maps:to_list(maps:merge(?DEFAULT_POOL_OPTIONS, PoolOpts1))).
 
 -spec start_link(init_data()) ->
@@ -63,11 +69,11 @@ child_spec(Params) ->
 start_link(Options) ->
     gen_server:start_link(?MODULE, Options, []).
 
--spec validate(Value :: {{packageName}}:value(), Defname :: {{packageName}}:param_name()) ->
-    ok | {error, Error :: {{packageName}}:error_reason() | validator_unavailable}.
+-spec validate(Type :: type(), Value :: swagger:value(), Defname :: swagger:param_name()) ->
+    ok | {error, Error :: swagger:error_reason() | validator_unavailable}.
 
-validate(Value, Defname) ->
-    PoolName = construct_pool_name(),
+validate(Type, Value, Defname) ->
+    PoolName = construct_pool_name(Type),
     case pooler:take_member(PoolName, ?DEFAULT_TAKE_TIMEOUT) of
         Pid when is_pid(Pid) ->
             try
@@ -84,8 +90,9 @@ validate(Value, Defname) ->
 
 %%
 
-construct_pool_name() ->
-    binary_to_atom(<<?MODULE_STRING, $_, ?POOL_ID/binary>>, utf8).
+construct_pool_name(Type0) ->
+    Type = atom_to_binary(Type0, utf8),
+    binary_to_atom(<<?MODULE_STRING, $_, ?POOL_ID/binary, $_, Type/binary>>, utf8).
 
 call_validator(Pid, Value, Defname) ->
     gen_server:call(Pid, {validate, Value, Defname}).
