@@ -97,12 +97,10 @@ validate_response(Spec, RespBody) ->
 -spec encode_response(Resp :: {{packageName}}_logic_handler:response()) ->
     Encoded :: response().
 
-encode_response({Code, Headers, Body0}) ->
-    Body = case Body0 of
-        undefined -> <<>>;
-        _ -> jsx:encode(Body0)
-    end,
-    {Code, Headers, Body}.
+encode_response({Code, Headers, undefined}) ->
+    {Code, Headers, <<>>};
+encode_response({Code, Headers, Body}) ->
+    {Code, Headers, jsx:encode(Body)}.
 
 -spec process_response(
     Status      :: ok | error,
@@ -154,17 +152,20 @@ populate_request_param({Name, #{rules := Rules, source := Source}}, Req0) ->
                 {error, Error}  ->
                     {error, error_message(Name, Error), Req}
             end;
-        E = {error, _, _} ->
-            E
+        {error, Message, Req} ->
+            {error, error_message(Name, wrong_body, Message), Req}
     end.
 
 -spec error_message(Name :: {{packageName}}:param_name(), Error :: {{packageName}}_validation:error()) ->
     Message :: {{packageName}}:error_reason().
 error_message(Name, Error = #{type := Type}) ->
+    error_message(Name, Type, maps:get(description, Error, <<>>)).
+
+error_message(Name, ErrorType, Description) ->
     jsx:encode(#{
         <<"name">>        => {{packageName}}_utils:to_binary(Name),
-        <<"errorType">>   => {{packageName}}_utils:to_binary(Type),
-        <<"description">> => maps:get(description, Error, <<>>)
+        <<"errorType">>   => {{packageName}}_utils:to_binary(ErrorType),
+        <<"description">> => {{packageName}}_utils:to_binary(Description)
     }).
 
 determine_peer_from_header(undefined, {IP, Port}) ->

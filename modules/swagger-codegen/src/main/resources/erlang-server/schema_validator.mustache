@@ -90,8 +90,11 @@ validate(Type, Value, Defname) ->
 
 %%
 
-construct_pool_name(Type0) ->
-    Type = atom_to_binary(Type0, utf8),
+construct_pool_name(request) ->
+    construct_pool_name(<<"request">>);
+construct_pool_name(response) ->
+    construct_pool_name(<<"response">>);
+construct_pool_name(Type) when is_binary(Type) ->
     binary_to_atom(<<?MODULE_STRING, $_, ?POOL_ID/binary, $_, Type/binary>>, utf8).
 
 call_validator(Pid, Value, Defname) ->
