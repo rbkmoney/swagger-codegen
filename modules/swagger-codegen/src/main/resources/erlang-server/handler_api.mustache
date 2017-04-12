@@ -26,7 +26,7 @@
 -export_type([request_spec/0]).
 -export_type([response_spec/0]).
 
--type response() :: {cowboy:http_status(), cowboy:http_headers(), binary()}.
+-type response() :: {cowboy:http_status(), cowboy:http_headers(), binary() | undefined}.
 
 %% API
 
@@ -97,8 +97,8 @@ validate_response(Spec, RespBody) ->
 -spec encode_response(Resp :: {{packageName}}_logic_handler:response()) ->
     Encoded :: response().
 
-encode_response({Code, Headers, undefined}) ->
-    {Code, Headers, <<>>};
+encode_response(Resp = {Code, Headers, undefined}) ->
+    Resp;
 encode_response({Code, Headers, Body}) ->
     {Code, Headers, jsx:encode(Body)}.
 
@@ -110,6 +110,9 @@ encode_response({Code, Headers, Body}) ->
 ) ->
     Req :: cowboy_req:req().
 
+process_response(ok, {Code, Headers, undefined}, Req0, _) ->
+    {ok, Req} = cowboy_req:reply(Code, Headers, Req0),
+    Req;
 process_response(ok, {Code, Headers, Body}, Req0, _) ->
     {ok, Req} = cowboy_req:reply(Code, Headers, Body, Req0),
     Req;

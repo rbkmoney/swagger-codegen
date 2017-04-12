@@ -29,9 +29,8 @@
 }.
 -type raw_schema() :: {{packageName}}_schema_validator_worker:raw_schema().
 -type params() :: #{
-    req_validator_pool_opts  => pool_options(),
-    resp_validator_pool_opts => pool_options(),
-    swagger_schema           => raw_schema()
+    validator_pool_opts => pool_options(),
+    swagger_schema      => raw_schema()
 }.
 -type type() :: request | response.
 
@@ -44,23 +43,20 @@
     max_count  => 20
 }).
 -define(DEFAULT_TAKE_TIMEOUT, {3, sec}).
--define(POOL_ID,              <<"{{basePath}}">>). %% ARENTRUE add the param specifying the role [server | client]
+-define(POOL_ID,              <<"{{basePath}}">>). %% ToDo: add a param specifying the role [server | client].
 
 %%
 
 -spec child_spec(Type :: type(), Params :: params()) ->
     ChildSpec :: supervisor:child_spec().
 
-child_spec(request, Params) ->
-    PoolOpts = maps:get(req_validator_pool_opts, Params, #{}),
-    child_spec_(PoolOpts#{name => construct_pool_name(request)}, Params);
-child_spec(response, Params) ->
-    PoolOpts = maps:get(resp_validator_pool_opts, Params, #{}),
-    child_spec_(PoolOpts#{name => construct_pool_name(response)}, Params).
-
-child_spec_(PoolOpts0, Params) ->
+child_spec_(Type, Params) ->
+    PoolOpts0 = maps:get(validator_pool_opts, Params, #{}),
     Schema    = maps:get(swagger_schema, Params, undefined),
-    PoolOpts1 = PoolOpts0#{start_mfa => {?MODULE, start_link, [Schema]}},
+    PoolOpts1 = PoolOpts0#{
+        start_mfa => {?MODULE, start_link, [Schema]},
+        name      => construct_pool_name(Type)
+    },
     pooler:pool_child_spec(maps:to_list(maps:merge(?DEFAULT_POOL_OPTIONS, PoolOpts1))).
 
 -spec start_link(init_data()) ->

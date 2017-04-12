@@ -1,10 +1,10 @@
 -module({{packageName}}_schema_validator_util).
 
--export([fix_discriminators/1]).
+-export([enumerate_discriminator_children/1]).
 
--spec fix_discriminators(Schema :: map()) ->
+-spec enumerate_discriminator_children(Schema :: map()) ->
     Schema :: map() | no_return().
-fix_discriminators(Schema = #{<<"definitions">> := Defs}) ->
+enumerate_discriminator_children(Schema = #{<<"definitions">> := Defs}) ->
     try
         {Parents, _} = maps:fold(fun check_definition/3, {#{}, #{}}, Defs),
         maps:fold(fun correct_schema/3, Schema, Parents)
@@ -12,7 +12,7 @@ fix_discriminators(Schema = #{<<"definitions">> := Defs}) ->
         _:Error ->
             handle_error(Error)
     end;
-fix_discriminators(_) ->
+enumerate_discriminator_children(_) ->
     handle_error(no_definitions).
 
 -spec handle_error(_) ->
@@ -198,10 +198,10 @@ get_enum(Parent, Discr, Schema) ->
     lists:sort(get_sub_schema([<<"enum">>, Discr, <<"properties">>, Parent, <<"definitions">>], Schema)).
 
 -spec test() -> _.
--spec fix_discriminators_test() -> _.
-fix_discriminators_test() ->
+-spec enumerate_discriminator_children_test() -> _.
+enumerate_discriminator_children_test() ->
     Schema      = jsx:decode(?SCHEMA, [return_maps]),
-    FixedSchema = fix_discriminators(Schema),
+    FixedSchema = enumerate_discriminator_children(Schema),
     ?assertEqual(lists:sort([<<"Dog">>, <<"Cat">>]),       get_enum(<<"Pet">>,         <<"type">>,   FixedSchema)),
     ?assertEqual(lists:sort([<<"Family">>, <<"Person">>]), get_enum(<<"Owner">>,       <<"type">>,   FixedSchema)),
     ?assertEqual([],                                       get_enum(<<"LegalStatus">>, <<"status">>, FixedSchema)).

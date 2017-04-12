@@ -34,7 +34,7 @@ init_schema() ->
 -spec init_schema(BinSchema :: raw_schema()) ->
     Schema :: schema().
 init_schema(BinSchema) ->
-    {{packageName}}_schema_validator_util:fix_discriminators(parse_schema(BinSchema)).
+    {{packageName}}_schema_validator_util:enumerate_discriminator_children(parse_schema(BinSchema)).
 
 -spec init_state() ->
     [].

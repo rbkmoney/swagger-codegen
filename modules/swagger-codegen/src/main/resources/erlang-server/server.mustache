@@ -12,14 +12,13 @@
 
 -type id() :: atom().
 -type params() :: #{
-    ip                := inet:ip_address(),
-    port              := inet:port_number(),
-    net_opts          := [],
-    logic_handler     => module(),
-    cowboy_extra_opts => list(),
-    swagger_schema           => {{packageName}}_schema_validator:raw_schema(),
-    req_validator_pool_opts  => {{packageName}}_schema_validator:pool_options(),
-    resp_validator_pool_opts => {{packageName}}_schema_validator:pool_options()
+    ip                  := inet:ip_address(),
+    port                := inet:port_number(),
+    net_opts            := [],
+    logic_handler       => module(),
+    cowboy_extra_opts   => list(),
+    swagger_schema      => {{packageName}}_schema_validator:raw_schema(),
+    validator_pool_opts => {{packageName}}_schema_validator:pool_options()
 }.
 
 -export_type([id/0]).
@@ -50,7 +49,7 @@ init(Params) ->
 
 child_spec_(validator, Params) ->
     {{packageName}}_schema_validator_sup:child_spec(maps:with(
-        [resp_validator_pool_opts, req_validator_pool_opts, swagger_schema],
+        [validator_pool_opts, swagger_schema],
         Params
     ));
 child_spec_(server, #{
