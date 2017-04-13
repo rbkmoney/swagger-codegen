@@ -50,7 +50,7 @@
 -spec child_spec(Type :: type(), Params :: params()) ->
     ChildSpec :: supervisor:child_spec().
 
-child_spec_(Type, Params) ->
+child_spec(Type, Params) ->
     PoolOpts0 = maps:get(validator_pool_opts, Params, #{}),
     Schema    = maps:get(swagger_schema, Params, undefined),
     PoolOpts1 = PoolOpts0#{

@@ -97,7 +97,7 @@ validate_response(Spec, RespBody) ->
 -spec encode_response(Resp :: {{packageName}}_logic_handler:response()) ->
     Encoded :: response().
 
-encode_response(Resp = {Code, Headers, undefined}) ->
+encode_response(Resp = {_, _, undefined}) ->
     Resp;
 encode_response({Code, Headers, Body}) ->
     {Code, Headers, jsx:encode(Body)}.
