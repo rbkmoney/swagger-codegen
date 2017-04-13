@@ -11,7 +11,7 @@
 
 {{#authMethods}}
     {{#isApiKey}}
--spec authorize_api_key({{packageName}}_api:operation_id(), {{packageName}}_api:api_key()) ->
+-spec authorize_api_key({{packageName}}:operation_id(), {{packageName}}:api_key()) ->
     {true, undefined}.
 
 authorize_api_key(_, _) ->
@@ -19,12 +19,12 @@ authorize_api_key(_, _) ->
     {{/isApiKey}}
 {{/authMethods}}
 
--spec handle_request({{packageName}}_api:operation_id(), cowboy_req:req(), {{packageName}}_api:request_context()) ->
-    {{packageName}}_logic_handler:handler_response().
+-spec handle_request({{packageName}}:operation_id(), {{packageName}}:object(), {{packageName}}:request_context()) ->
+    {ok | error, {{packageName}}_logic_handler:response()}.
 
-handle_request(OperationID, Req, Context) ->
+handle_request(OperationID, Request, Context) ->
     error_logger:error_msg(
         "Got not implemented request to process: ~p~n",
-        [{OperationID, Req, Context}]
+        [{OperationID, Request, Context}]
     ),
     {error, {501, [], undefined}}.

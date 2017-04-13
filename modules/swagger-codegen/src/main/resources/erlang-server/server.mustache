@@ -6,17 +6,19 @@
 -define(DEFAULT_LOGIC_HANDLER, {{packageName}}_default_logic_handler).
 
 -export([child_spec/2]).
--export([start_link/2]).
+-export([start_link/1]).
 
 -export([init/1]).
 
 -type id() :: atom().
 -type params() :: #{
-    ip                   := inet:ip_address(),
-    port                 := inet:port_number(),
-    net_opts             := [],
-    logic_handler        => module(),
-    cowboy_extra_opts    => list()
+    ip                  := inet:ip_address(),
+    port                := inet:port_number(),
+    net_opts            := [],
+    logic_handler       => module(),
+    cowboy_extra_opts   => list(),
+    swagger_schema      => {{packageName}}_schema_validator:raw_schema(),
+    validator_pool_opts => {{packageName}}_schema_validator:pool_options()
 }.
 
 -export_type([id/0]).
@@ -25,37 +27,42 @@
 -spec child_spec(id(), params()) -> supervisor:child_spec().
 
 child_spec(ID, Params) ->
-    #{id => {?MODULE, ID}, start => {?MODULE, start_link, [ID, Params]}, type => supervisor}.
+    #{id => {?MODULE, ID}, start => {?MODULE, start_link, [Params]}, type => supervisor}.
 
--spec start_link(id(), params()) ->
+-spec start_link(params()) ->
     {ok, pid()}.
 
-start_link(ID, Params) ->
-    supervisor:start_link(?MODULE, {ID, Params}).
+start_link(Params) ->
+    supervisor:start_link(?MODULE, Params).
 
--spec init({id(), params()}) ->
+-spec init(params()) ->
     {ok, {supervisor:sup_flags(), [supervisor:child_spec()]}}.
 
-init({ID, Params}) ->
-    {{packageName}}_schema_validator:init(),
+init(Params) ->
     {ok, {
         #{strategy => rest_for_one},
         [
-            child_spec(server, ID, Params)
+            child_spec_(validator, Params),
+            child_spec_(server, Params)
         ]
     }}.
 
-child_spec(server, ID, #{
+child_spec_(validator, Params) ->
+    {{packageName}}_schema_validator_sup:child_spec(maps:with(
+        [validator_pool_opts, swagger_schema],
+        Params
+    ));
+child_spec_(server, #{
     ip            := IP ,
     port          := Port,
     net_opts      := NetOpts
 } = Params) ->
-    AcceptorsPool = ?DEFAULT_ACCEPTORS_POOLSIZE,
     {Transport, TransportOpts} = get_socket_transport(IP, Port, NetOpts),
-    LogicHandler = maps:get(logic_handler, Params, ?DEFAULT_LOGIC_HANDLER),
-    ExtraOpts = maps:get(cowboy_extra_opts, Params, []),
-    CowboyOpts = get_cowboy_config(LogicHandler, ExtraOpts),
-    ranch:child_spec({?MODULE, ID}, AcceptorsPool,
+    AcceptorsPool = ?DEFAULT_ACCEPTORS_POOLSIZE,
+    LogicHandler  = maps:get(logic_handler, Params, ?DEFAULT_LOGIC_HANDLER),
+    ExtraOpts     = maps:get(cowboy_extra_opts, Params, []),
+    CowboyOpts    = get_cowboy_config(LogicHandler, ExtraOpts),
+    ranch:child_spec(?MODULE, AcceptorsPool,
         Transport, TransportOpts, cowboy_protocol, CowboyOpts).
 
 get_socket_transport(IP, Port, Options) ->

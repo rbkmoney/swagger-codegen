@@ -1,0 +1,38 @@
+-module({{packageName}}_schema_validator_sup).
+
+-behaviour(supervisor).
+
+%% API
+-export([start_link/1]).
+-export([child_spec/1]).
+
+%% Supervisor callbacks
+-export([init/1]).
+
+-define(ID, <<"{{basePath}}/sup">>).
+
+%%
+
+-spec start_link({{packageName}}_schema_validator:params()) ->
+    {ok, pid()}.
+
+start_link(Params) ->
+    supervisor:start_link(?MODULE, Params).
+
+
+-spec child_spec({{packageName}}_schema_validator:params()) -> supervisor:child_spec().
+
+child_spec(Params) ->
+    #{id => {?MODULE, ?ID}, start => {?MODULE, start_link, [Params]}, type => supervisor}.
+
+-spec init({{packageName}}_schema_validator:params()) ->
+    {ok, {supervisor:sup_flags(), [supervisor:child_spec()]}}.
+
+init(Params) ->
+    {ok, {
+        #{strategy => rest_for_one},
+        [
+            {{packageName}}_schema_validator:child_spec(response, Params),
+            {{packageName}}_schema_validator:child_spec(request, Params)
+        ]
+    }}.

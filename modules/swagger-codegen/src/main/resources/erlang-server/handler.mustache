@@ -20,14 +20,16 @@
 -export([handle_request_json/2]).
 
 -record(state, {
-    operation_id :: {{packageName}}_api:operation_id(),
-    logic_handler :: atom(),
-    context :: {{packageName}}_api:request_context(),
-    id :: {{packageName}}_server:id()
+    operation_id  :: {{packageName}}:operation_id(),
+    logic_handler :: module(),
+    context       :: {{packageName}}:request_context()
 }).
 
--type state() :: state().
--type content_type() :: {binary(), binary(), '*' | [{binary(), binary()}]}.
+-type state()              :: state().
+-type content_type()       :: {binary(), binary(), '*' | [{binary(), binary()}]}.
+-type processed_response() :: {halt, cowboy_req:req(), state()}.
+
+%% Cowboy REST callbacks
 
 -spec init(TransportName :: atom(), Req :: cowboy_req:req(), Opts :: {{packageName}}_router:init_opts()) ->
     {upgrade, protocol, cowboy_rest, Req :: cowboy_req:req(), Opts :: {{packageName}}_router:init_opts()}.
@@ -40,14 +42,14 @@ init(_Transport, Req, Opts) ->
 
 rest_init(Req0, {Operations, LogicHandler}) ->
     {Method, Req1} = cowboy_req:method(Req0),
-    OperationID = maps:get(Method, Operations, undefined),
+    OperationID    = maps:get(Method, Operations, undefined),
 
     error_logger:info_msg("Attempt to process operation: ~p", [OperationID]),
 
     State = #state{
-        operation_id = OperationID,
+        operation_id  = OperationID,
         logic_handler = LogicHandler,
-        context = #{}
+        context       = #{}
     },
 
     {ok, Req1, State}.
@@ -70,7 +72,7 @@ allowed_methods(Req, State) ->
 -spec is_authorized(Req :: cowboy_req:req(), State :: state()) ->
     {
         Value :: true | {false, AuthHeader :: iodata()},
-        Req :: cowboy_req:req(),
+        Req   :: cowboy_req:req(),
         State :: state()
     }.
 {{#operations}}{{#operation}}
@@ -78,14 +80,14 @@ allowed_methods(Req, State) ->
 is_authorized(
     Req0,
     State = #state{
-        operation_id = '{{operationId}}' = OperationID,
+        operation_id  = '{{operationId}}' = OperationID,
         logic_handler = LogicHandler,
-        context = Context
+        context       = Context
     }
 ) ->
   {{#isApiKey}}
     From = {{#isKeyInQuery}}qs_val{{/isKeyInQuery}}{{#isKeyInHeader}}header{{/isKeyInHeader}},
-    Result = {{packageName}}_auth:authorize_api_key(
+    Result = {{packageName}}_handler_api:authorize_api_key(
         LogicHandler,
         OperationID,
         From,
@@ -116,7 +118,7 @@ is_authorized(Req, State) ->
 -spec content_types_accepted(Req :: cowboy_req:req(), State :: state()) ->
     {
         Value :: [{content_type(), AcceptResource :: atom()}],
-        Req :: cowboy_req:req(),
+        Req   :: cowboy_req:req(),
         State :: state()
     }.
 
@@ -144,7 +146,7 @@ valid_content_headers(Req, State) ->
 -spec content_types_provided(Req :: cowboy_req:req(), State :: state()) ->
     {
         Value :: [{content_type(), ProvideResource :: atom()}],
-        Req :: cowboy_req:req(),
+        Req   :: cowboy_req:req(),
         State :: state()
     }.
 
@@ -163,43 +165,15 @@ charsets_provided(Req, State) ->
     {Value :: boolean(), Req :: cowboy_req:req(), State :: state()}.
 
 malformed_request(Req, State = #state{context = Context}) ->
-    {PeerResult, Req1} = determine_peer(Req),
+    {PeerResult, Req1} = {{packageName}}_handler_api:determine_peer(Req),
     case PeerResult of
         {ok, Peer} ->
             Context1 = Context#{peer => Peer},
-            State1 = State#state{context = Context1},
+            State1   = State#state{context = Context1},
             {false, Req1, State1};
         {error, Reason} ->
             error_logger:error_msg("Unable to determine client peer: ~p", [Reason]),
             {true, Req1, State}
-    end.
-
--spec determine_peer(cowboy_req:req()) ->
-    {{ok, {{packageName}}_api:client_peer()} | {error, malformed | einval}, cowboy_req:req()}.
-
-determine_peer(Req) ->
-    {Peer, Req1} = cowboy_req:peer(Req),
-    {Value, Req2} = cowboy_req:header(<<"x-forwarded-for">>, Req1),
-    {determine_peer_from_header(Value, Peer), Req2}.
-
-determine_peer_from_header(undefined, {IP, Port}) ->
-    % undefined, assuming no proxies were involved
-    {ok, #{ip_address => IP, port_number => Port}};
-determine_peer_from_header(Value, _Peer) when is_binary(Value) ->
-    ClientPeer = string:strip(binary_to_list(Value)),
-    case string:tokens(ClientPeer, ", ") of
-        [ClientIP | _Proxies] ->
-            case inet:parse_strict_address(ClientIP) of
-                {ok, IP} ->
-                    % ok
-                    {ok, #{ip_address => IP}};
-                Error ->
-                    % unparseable ip address
-                    Error
-            end;
-        _ ->
-            % empty or malformed value
-            {error, malformed}
     end.
 
 -spec allow_missing_post(Req :: cowboy_req:req(), State :: state()) ->
@@ -227,75 +201,76 @@ valid_entity_length(Req, State) ->
     %% @TODO check the length
     {true, Req, State}.
 
-%%%%
 
--type result_ok() :: {
-    ok,
-    {Status :: cowboy:http_status(), Headers :: cowboy:http_headers(), Body :: iodata()}
-}.
+%% Handlers
 
--type result_error() :: {error, Reason :: any()}.
-
--type processed_response() :: {halt, cowboy_req:req(), state()}.
-
--spec process_response(result_ok() | result_error(), cowboy_req:req(), state()) ->
+-spec handle_request_json(Req :: cowboy_req:req(), State :: state()) ->
     processed_response().
-
-process_response(Response, Req0, State = #state{operation_id = OperationID}) ->
-    case Response of
-        {ok, {Code, Headers, Body}} ->
-            {ok, Req} = cowboy_req:reply(Code, Headers, Body, Req0),
-            {halt, Req, State};
-        {error, Message} ->
-            error_logger:info_msg(
-                "Unable to process request for ~p: ~p",
-                [OperationID, Message]
-            ),
-            {ok, Req} = cowboy_req:reply(400, [], Message, Req0),
-            {halt, Req, State}
-    end.
-
--spec handle_request_json(cowboy_req:req(), state()) -> {halt, cowboy_req:req(), state()}.
 
 handle_request_json(
     Req0,
     State = #state{
-        operation_id = OperationID,
+        operation_id  = OperationID,
         logic_handler = LogicHandler,
-        context = Context
+        context       = Context
     }
 ) ->
-    case {{packageName}}_api:populate_request(OperationID, Req0) of
+    case populate_request(OperationID, Req0) of
         {ok, Populated, Req1} ->
-            Result =  {{packageName}}_logic_handler:handle_request(
-                LogicHandler,
-                OperationID,
-                Populated,
-                Context
-            ),
-            _ = validate_response(OperationID, Result),
-
-            {_, {Code, Headers, Body}} = Result,
-            PreparedBody = case Body of
-                undefined -> <<>>;
-                _ -> jsx:encode(Body)
-            end,
-            Response = {ok, {Code, Headers, PreparedBody}},
-            process_response(Response, Req1, State);
+            {Status, Resp} = handle_request(LogicHandler, OperationID, Populated, Context),
+            ok             = validate_response(Status, Resp, OperationID),
+            process_response(ok, encode_response(Resp), Req1, State);
         {error, Reason, Req1} ->
-            process_response({error, Reason}, Req1, State)
+            process_response(error, Reason, Req1, State)
     end.
 
-validate_response(_, {error, _}) ->
-    ok;
 
-validate_response(OperationID, {ok, {Code, _Headers, Body}}) ->
-    {{packageName}}_api:validate_response(
-        OperationID,
-        Code,
-        Body
-    ).
+%% Internal
+
+populate_request(OperationID, Req) ->
+    {{packageName}}_handler_api:populate_request(get_request_spec(OperationID), Req).
+
+handle_request(LogicHandler, OperationID, Populated, Context) ->
+    {{packageName}}_logic_handler:handle_request(LogicHandler, OperationID, Populated, Context).
+
+validate_response(error, _, _) ->
+    ok;
+validate_response(ok, {Code, _Headers, Body}, OperationID) ->
+    Spec = get_response_spec(OperationID, Code),
+    {{packageName}}_handler_api:validate_response(Spec, Body).
+
+encode_response(Resp) ->
+    {{packageName}}_handler_api:encode_response(Resp).
+
+process_response(Status, Result, Req0, State = #state{operation_id = OperationID}) ->
+    Req = {{packageName}}_handler_api:process_response(Status, Result, Req0, OperationID),
+    {halt, Req, State}.
 
 validate_headers(_, Req) ->
     {true, Req}.
 
+-spec get_request_spec(OperationID :: {{packageName}}:operation_id()) ->
+    Spec :: {{packageName}}_handler_api:request_spec() | no_return().
+
+{{#operations}}{{#operation}}
+get_request_spec('{{operationId}}') ->
+    [
+        {{#allParams}}{{^isBodyParam}}{'{{baseName}}'{{/isBodyParam}}{{#isBodyParam}}{'{{dataType}}'{{/isBodyParam}}, #{
+            source => {{#isQueryParam}}qs_val{{/isQueryParam}}{{#isPathParam}}binding{{/isPathParam}}{{#isHeaderParam}}header{{/isHeaderParam}}{{#isBodyParam}}body{{/isBodyParam}},
+            rules  => {{#isListContainer}}[{list, '{{collectionFormat}}', {{#items}}[{{>api.param_info}}]{{/items}}}, {{>api.param_info}}]{{/isListContainer}}{{^isListContainer}}[{{>api.param_info}}]{{/isListContainer}}
+        }}{{#hasMore}},
+        {{/hasMore}}{{/allParams}}
+    ];
+{{/operation}}{{/operations}}
+get_request_spec(OperationID) ->
+    error({unknown_operation, OperationID}).
+
+-spec get_response_spec(OperationID :: {{packageName}}:operation_id(), Code :: cowboy:http_status()) ->
+    Spec :: {{packageName}}_handler_api:response_spec() | no_return().
+
+{{#operations}}{{#operation}}{{#responses}}
+get_response_spec('{{operationId}}', {{code}}) ->
+    {{#dataType}}{'{{dataType}}', '{{baseType}}'};{{/dataType}}{{^dataType}}undefined;{{/dataType}}
+{{/responses}}{{/operation}}{{/operations}}
+get_response_spec(OperationID, Code) ->
+    error({unknown_operation, OperationID, Code}).

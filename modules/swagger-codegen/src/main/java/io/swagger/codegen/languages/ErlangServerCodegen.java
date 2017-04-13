@@ -116,18 +116,19 @@ public class ErlangServerCodegen extends DefaultCodegen implements CodegenConfig
         supportingFiles.add(new SupportingFile("rebar.config.mustache","", "rebar.config"));
         supportingFiles.add(new SupportingFile("app.src.mustache", "", "src" + File.separator + this.packageName + ".app.src"));
         supportingFiles.add(new SupportingFile("router.mustache", "",  toSourceFilePath("router", "erl")));
-        supportingFiles.add(new SupportingFile("api.mustache", "",  toSourceFilePath("api", "erl")));
         supportingFiles.add(new SupportingFile("server.mustache", "",  toSourceFilePath("server", "erl")));
         supportingFiles.add(new SupportingFile("utils.mustache", "",  toSourceFilePath("utils", "erl")));
-        supportingFiles.add(new SupportingFile("auth.mustache", "",  toSourceFilePath("auth", "erl")));
+        supportingFiles.add(new SupportingFile("types.mustache", "",  toPackageNameSrcFile("erl")));
+        supportingFiles.add(new SupportingFile("handler_api.mustache", "",  toSourceFilePath("handler_api", "erl")));
         supportingFiles.add(new SupportingFile("swagger.mustache", "", toPrivFilePath("swagger", "json")));
         supportingFiles.add(new SupportingFile("default_logic_handler.mustache", "",  toSourceFilePath("default_logic_handler", "erl")));
         supportingFiles.add(new SupportingFile("logic_handler.mustache", "",  toSourceFilePath("logic_handler", "erl")));
         supportingFiles.add(new SupportingFile("validation.mustache", "",  toSourceFilePath("validation", "erl")));
-        supportingFiles.add(new SupportingFile("validation_schema.mustache", "",  toSourceFilePath("validation_schema", "erl")));
-        supportingFiles.add(new SupportingFile("schema_validator.mustache", "",  toSourceFilePath("schema_validator", "erl")));
         supportingFiles.add(new SupportingFile("param_validator.mustache", "",  toSourceFilePath("param_validator", "erl")));
-        supportingFiles.add(new SupportingFile("handler_utils.mustache", "",  toSourceFilePath("handler_utils", "erl")));
+        supportingFiles.add(new SupportingFile("schema_validator.mustache", "",  toSourceFilePath("schema_validator", "erl")));
+        supportingFiles.add(new SupportingFile("schema_validator_sup.mustache", "",  toSourceFilePath("schema_validator_sup", "erl")));
+        supportingFiles.add(new SupportingFile("schema_validator_worker.mustache", "",  toSourceFilePath("schema_validator_worker", "erl")));
+        supportingFiles.add(new SupportingFile("schema_validator_util.mustache", "",  toSourceFilePath("schema_validator_util", "erl")));
         writeOptional(outputFolder, new SupportingFile("README.mustache", "", "README.md"));
     }
 
@@ -261,6 +262,10 @@ public class ErlangServerCodegen extends DefaultCodegen implements CodegenConfig
 
     protected String toSourceFilePath(String name, String extension) {
         return "src" + File.separator +  toModuleName(name) + "." + extension;
+    }
+
+    protected String toPackageNameSrcFile(String extension) {
+        return "src" + File.separator + this.packageName + "." + extension;
     }
 
     protected String toIncludeFilePath(String name, String extension) {

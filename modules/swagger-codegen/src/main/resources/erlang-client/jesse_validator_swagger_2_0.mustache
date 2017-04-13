@@ -6,7 +6,6 @@
 -export([init_state/0]).
 -export([check_value/3]).
 -export([options/0]).
--export([make_schema_ref/2]).
 
 -define(DISCRIMINATOR, <<"discriminator">>).
 -define(REF,           <<"$ref">>).
@@ -18,13 +17,6 @@ options() ->
     [
         {validator, ?MODULE}
     ].
-
--spec make_schema_ref(RefBase, Element) -> Ref when
-    RefBase :: string(),
-    Element :: string(),
-    Ref     :: string().
-make_schema_ref(RefBase, Element) ->
-    RefBase ++ "#/definitions/" ++ Element.
 
 -spec init_state() ->
     [].
@@ -220,15 +212,14 @@ make_ref_schema(Ref) ->
          ]
        }
      }}">>).
--define(SCHEMA_KEY, "http://example.com/pet").
 -define(PET_SCHEMA, "Pet").
 
 init_jesse() ->
     jesse:add_schema(?SCHEMA_KEY, ?SCHEMA, [{parser_fun, fun jsx:decode/1}]).
 
 validate(DefName, Value) ->
-    ok = init_jesse(),
-    case jesse:validate_ref(make_schema_ref(?SCHEMA_KEY, DefName), Value, options()) of
+    Schema = jsx:decode(?SCHEMA, [return_maps]),
+    case jesse:validate_definitions(DefName, Schema, Value, options()) of
         {ok, Value}    -> Value;
         {error, Error} -> Error
     end.
