@@ -2,24 +2,28 @@ package io.swagger.codegen.languages;
 
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.codegen.*;
 import io.swagger.models.*;
 import io.swagger.util.Json;
+import io.swagger.codegen.utils.ErlangJsonPrinter;
+import io.swagger.codegen.utils.ErlangJsonFactory;
+//import com.fasterxml.jackson.core.util.DefaultPrettyPrinter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+
+import com.fasterxml.jackson.core.*;
+import com.fasterxml.jackson.databind.*;
+
 import java.io.File;
-import java.io.IOException;
-import java.math.BigDecimal;
 import java.util.*;
 import java.util.Map.Entry;
-import org.apache.commons.lang3.StringUtils;
 
 public class ErlangServerCodegen extends DefaultCodegen implements CodegenConfig {
 
@@ -39,7 +43,7 @@ public class ErlangServerCodegen extends DefaultCodegen implements CodegenConfig
             setPackageName((String) additionalProperties.get(CodegenConstants.PACKAGE_NAME));
         } else {
             additionalProperties.put(CodegenConstants.PACKAGE_NAME, packageName);
-        };
+        }
 
         /**
          * Models.  You can write model files using the modelTemplateFiles map.
@@ -55,8 +59,8 @@ public class ErlangServerCodegen extends DefaultCodegen implements CodegenConfig
          * class
          */
         apiTemplateFiles.put(
-            "handler.mustache",   // the template to use
-            ".erl");       // the extension for each file to write
+                "handler.mustache",   // the template to use
+                ".erl");       // the extension for each file to write
 
         /**
          * Template Location.  This is the location which templates will be read from.  The generator
@@ -68,12 +72,12 @@ public class ErlangServerCodegen extends DefaultCodegen implements CodegenConfig
          * Reserved words.  Override this with reserved words specific to your language
          */
         setReservedWordsLowerCase(
-            Arrays.asList(
-                "after","and","andalso","band","begin","bnot","bor","bsl","bsr","bxor","case",
-                "catch","cond","div","end","fun","if","let","not","of","or","orelse","receive",
-                "rem","try","when","xor"
-            )
-       );
+                Arrays.asList(
+                        "after", "and", "andalso", "band", "begin", "bnot", "bor", "bsl", "bsr", "bxor", "case",
+                        "catch", "cond", "div", "end", "fun", "if", "let", "not", "of", "or", "orelse", "receive",
+                        "rem", "try", "when", "xor"
+                )
+        );
 
         instantiationTypes.clear();
 
@@ -101,7 +105,7 @@ public class ErlangServerCodegen extends DefaultCodegen implements CodegenConfig
 
         cliOptions.clear();
         cliOptions.add(new CliOption(CodegenConstants.PACKAGE_NAME, "Erlang package name (convention: lowercase).")
-            .defaultValue(this.packageName));
+                .defaultValue(this.packageName));
         /**
          * Additional Properties.  These values can be passed to the templates and
          * are available in models, apis, and supporting files
@@ -113,22 +117,22 @@ public class ErlangServerCodegen extends DefaultCodegen implements CodegenConfig
          * entire object tree available.  If the input file has a suffix of `.mustache
          * it will be processed by the template engine.  Otherwise, it will be copied
          */
-        supportingFiles.add(new SupportingFile("rebar.config.mustache","", "rebar.config"));
+        supportingFiles.add(new SupportingFile("rebar.config.mustache", "", "rebar.config"));
         supportingFiles.add(new SupportingFile("app.src.mustache", "", "src" + File.separator + this.packageName + ".app.src"));
-        supportingFiles.add(new SupportingFile("router.mustache", "",  toSourceFilePath("router", "erl")));
-        supportingFiles.add(new SupportingFile("server.mustache", "",  toSourceFilePath("server", "erl")));
-        supportingFiles.add(new SupportingFile("utils.mustache", "",  toSourceFilePath("utils", "erl")));
-        supportingFiles.add(new SupportingFile("types.mustache", "",  toPackageNameSrcFile("erl")));
-        supportingFiles.add(new SupportingFile("handler_api.mustache", "",  toSourceFilePath("handler_api", "erl")));
-        supportingFiles.add(new SupportingFile("swagger.mustache", "", toPrivFilePath("swagger", "json")));
-        supportingFiles.add(new SupportingFile("default_logic_handler.mustache", "",  toSourceFilePath("default_logic_handler", "erl")));
-        supportingFiles.add(new SupportingFile("logic_handler.mustache", "",  toSourceFilePath("logic_handler", "erl")));
-        supportingFiles.add(new SupportingFile("validation.mustache", "",  toSourceFilePath("validation", "erl")));
-        supportingFiles.add(new SupportingFile("param_validator.mustache", "",  toSourceFilePath("param_validator", "erl")));
-        supportingFiles.add(new SupportingFile("schema_validator.mustache", "",  toSourceFilePath("schema_validator", "erl")));
-        supportingFiles.add(new SupportingFile("schema_validator_sup.mustache", "",  toSourceFilePath("schema_validator_sup", "erl")));
-        supportingFiles.add(new SupportingFile("schema_validator_worker.mustache", "",  toSourceFilePath("schema_validator_worker", "erl")));
-        supportingFiles.add(new SupportingFile("schema_validator_util.mustache", "",  toSourceFilePath("schema_validator_util", "erl")));
+        supportingFiles.add(new SupportingFile("router.mustache", "", toSourceFilePath("router", "erl")));
+        supportingFiles.add(new SupportingFile("server.mustache", "", toSourceFilePath("server", "erl")));
+        supportingFiles.add(new SupportingFile("utils.mustache", "", toSourceFilePath("utils", "erl")));
+        supportingFiles.add(new SupportingFile("types.mustache", "", toPackageNameSrcFile("erl")));
+        supportingFiles.add(new SupportingFile("handler_api.mustache", "", toSourceFilePath("handler_api", "erl")));
+        supportingFiles.add(new SupportingFile("swagger.mustache", "", toPrivFilePath("swagger_new", "json")));
+        supportingFiles.add(new SupportingFile("default_logic_handler.mustache", "", toSourceFilePath("default_logic_handler", "erl")));
+        supportingFiles.add(new SupportingFile("logic_handler.mustache", "", toSourceFilePath("logic_handler", "erl")));
+        supportingFiles.add(new SupportingFile("validation.mustache", "", toSourceFilePath("validation", "erl")));
+        supportingFiles.add(new SupportingFile("param_validator.mustache", "", toSourceFilePath("param_validator", "erl")));
+        supportingFiles.add(new SupportingFile("schema_validator.mustache", "", toSourceFilePath("schema_validator", "erl")));
+        supportingFiles.add(new SupportingFile("schema_validator_sup.mustache", "", toSourceFilePath("schema_validator_sup", "erl")));
+        supportingFiles.add(new SupportingFile("schema_validator_worker.mustache", "", toSourceFilePath("schema_validator_worker", "erl")));
+        supportingFiles.add(new SupportingFile("schema_validator_util.mustache", "", toSourceFilePath("schema_validator_util", "erl")));
         writeOptional(outputFolder, new SupportingFile("README.mustache", "", "README.md"));
     }
 
@@ -187,7 +191,7 @@ public class ErlangServerCodegen extends DefaultCodegen implements CodegenConfig
      */
     @Override
     public String escapeReservedWord(String name) {
-        if(this.reservedWordsMappings().containsKey(name)) {
+        if (this.reservedWordsMappings().containsKey(name)) {
             return this.reservedWordsMappings().get(name);
         }
         return "_" + name;
@@ -237,10 +241,10 @@ public class ErlangServerCodegen extends DefaultCodegen implements CodegenConfig
 
     @Override
     public Map<String, Object> postProcessSupportingFileData(Map<String, Object> objs) {
-        Swagger swagger = (Swagger)objs.get("swagger");
-        if(swagger != null) {
+        Swagger swagger = (Swagger) objs.get("swagger");
+        if (swagger != null) {
             try {
-                objs.put("swagger-json", Json.mapper().writeValueAsString(swagger));
+                objs.put("swagger-json", Json.mapper().writer(new ErlangJsonPrinter()).with(new ErlangJsonFactory()).writeValueAsString(swagger));
             } catch (JsonProcessingException e) {
                 LOGGER.error(e.getMessage(), e);
             }
@@ -261,7 +265,7 @@ public class ErlangServerCodegen extends DefaultCodegen implements CodegenConfig
     }
 
     protected String toSourceFilePath(String name, String extension) {
-        return "src" + File.separator +  toModuleName(name) + "." + extension;
+        return "src" + File.separator + toModuleName(name) + "." + extension;
     }
 
     protected String toPackageNameSrcFile(String extension) {
