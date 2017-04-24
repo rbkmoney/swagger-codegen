@@ -1,6 +1,12 @@
--module({{packageName}}_schema_validator_util).
+-module({{packageName}}_schema).
 
+-export([get/0]).
+-export([raw_schema/0]).
 -export([enumerate_discriminator_children/1]).
+
+-spec get() -> {{packageName}}:object().
+get() ->
+    ct_expand:term(enumerate_discriminator_children(maps:with([<<"definitions">>], raw_schema()))).
 
 -spec enumerate_discriminator_children(Schema :: map()) ->
     Schema :: map() | no_return().
@@ -79,6 +85,9 @@ get_sub_schema(ReversedPath, Schema) ->
 update_sub_schema(Key, Value, Schema) ->
     Schema#{Key => Value}.
 
+-spec raw_schema() -> map().
+raw_schema() ->
+    {{{swagger-json}}}.
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
@@ -205,4 +214,12 @@ enumerate_discriminator_children_test() ->
     ?assertEqual(lists:sort([<<"Dog">>, <<"Cat">>]),       get_enum(<<"Pet">>,         <<"type">>,   FixedSchema)),
     ?assertEqual(lists:sort([<<"Family">>, <<"Person">>]), get_enum(<<"Owner">>,       <<"type">>,   FixedSchema)),
     ?assertEqual([],                                       get_enum(<<"LegalStatus">>, <<"status">>, FixedSchema)).
+
+-spec get_test() -> _.
+get_test() ->
+    ?assertEqual(
+       enumerate_discriminator_children(maps:with([<<"definitions">>], raw_schema())),
+       ?MODULE:get()
+    ).
+
 -endif.

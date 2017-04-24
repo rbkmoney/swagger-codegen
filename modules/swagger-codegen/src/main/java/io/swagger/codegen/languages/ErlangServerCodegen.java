@@ -1,25 +1,23 @@
 package io.swagger.codegen.languages;
 
-import com.fasterxml.jackson.core.JsonGenerator;
+//import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.SerializerProvider;
-import com.fasterxml.jackson.databind.module.SimpleModule;
+//import com.fasterxml.jackson.databind.SerializerProvider;
+//import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.codegen.*;
 import io.swagger.models.*;
 import io.swagger.util.Json;
-import io.swagger.codegen.utils.ErlangJsonPrinter;
-import io.swagger.codegen.utils.ErlangJsonFactory;
-//import com.fasterxml.jackson.core.util.DefaultPrettyPrinter;
+import io.swagger.codegen.utils.erlang.*;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 
-import com.fasterxml.jackson.core.*;
-import com.fasterxml.jackson.databind.*;
+//import com.fasterxml.jackson.core.*;
+//import com.fasterxml.jackson.databind.*;
 
 import java.io.File;
 import java.util.*;
@@ -124,15 +122,12 @@ public class ErlangServerCodegen extends DefaultCodegen implements CodegenConfig
         supportingFiles.add(new SupportingFile("utils.mustache", "", toSourceFilePath("utils", "erl")));
         supportingFiles.add(new SupportingFile("types.mustache", "", toPackageNameSrcFile("erl")));
         supportingFiles.add(new SupportingFile("handler_api.mustache", "", toSourceFilePath("handler_api", "erl")));
-        supportingFiles.add(new SupportingFile("swagger.mustache", "", toPrivFilePath("swagger_new", "json")));
         supportingFiles.add(new SupportingFile("default_logic_handler.mustache", "", toSourceFilePath("default_logic_handler", "erl")));
         supportingFiles.add(new SupportingFile("logic_handler.mustache", "", toSourceFilePath("logic_handler", "erl")));
         supportingFiles.add(new SupportingFile("validation.mustache", "", toSourceFilePath("validation", "erl")));
         supportingFiles.add(new SupportingFile("param_validator.mustache", "", toSourceFilePath("param_validator", "erl")));
         supportingFiles.add(new SupportingFile("schema_validator.mustache", "", toSourceFilePath("schema_validator", "erl")));
-        supportingFiles.add(new SupportingFile("schema_validator_sup.mustache", "", toSourceFilePath("schema_validator_sup", "erl")));
-        supportingFiles.add(new SupportingFile("schema_validator_worker.mustache", "", toSourceFilePath("schema_validator_worker", "erl")));
-        supportingFiles.add(new SupportingFile("schema_validator_util.mustache", "", toSourceFilePath("schema_validator_util", "erl")));
+        supportingFiles.add(new SupportingFile("schema.mustache", "", toSourceFilePath("schema", "erl")));
         writeOptional(outputFolder, new SupportingFile("README.mustache", "", "README.md"));
     }
 
@@ -274,10 +269,6 @@ public class ErlangServerCodegen extends DefaultCodegen implements CodegenConfig
 
     protected String toIncludeFilePath(String name, String extension) {
         return "include" + File.separator + toModuleName(name) + "." + extension;
-    }
-
-    protected String toPrivFilePath(String name, String extension) {
-        return "priv" + File.separator + name + "." + extension;
     }
 
     @Override

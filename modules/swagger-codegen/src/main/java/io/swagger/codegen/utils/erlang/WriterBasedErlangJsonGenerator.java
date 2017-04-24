@@ -1,4 +1,4 @@
-package io.swagger.codegen.utils;
+package io.swagger.codegen.utils.erlang;
 
 import java.io.*;
 import java.math.BigDecimal;
@@ -94,7 +94,6 @@ public class WriterBasedErlangJsonGenerator
     public WriterBasedErlangJsonGenerator(IOContext ctxt, int features,
             ObjectCodec codec, Writer w) {
         super(ctxt, features, codec);
-        System.out.println("WriterBasedErlangJsonGenerator CONSTRUCTOR +++++++++++++++++++++++++++++++++++++++++++++++");
         _writer = w;
         _outputBuffer = ctxt.allocConcatBuffer();
         _outputEnd = _outputBuffer.length;

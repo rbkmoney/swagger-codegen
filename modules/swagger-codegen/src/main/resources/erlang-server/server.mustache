@@ -16,9 +16,7 @@
     port                := inet:port_number(),
     net_opts            := [],
     logic_handler       => module(),
-    cowboy_extra_opts   => list(),
-    swagger_schema      => {{packageName}}_schema_validator:raw_schema(),
-    validator_pool_opts => {{packageName}}_schema_validator:pool_options()
+    cowboy_extra_opts   => list()
 }.
 
 -export_type([id/0]).
@@ -41,18 +39,10 @@ start_link(Params) ->
 init(Params) ->
     {ok, {
         #{strategy => rest_for_one},
-        [
-            child_spec_(validator, Params),
-            child_spec_(server, Params)
-        ]
+        [child_spec(Params)]
     }}.
 
-child_spec_(validator, Params) ->
-    {{packageName}}_schema_validator_sup:child_spec(maps:with(
-        [validator_pool_opts, swagger_schema],
-        Params
-    ));
-child_spec_(server, #{
+child_spec(#{
     ip            := IP ,
     port          := Port,
     net_opts      := NetOpts

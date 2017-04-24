@@ -1,6 +1,12 @@
+{erl_opts, [
+    {parse_transform, ct_expand}
+]}.
+
+
 {deps, [
-    {jsx, "2.8.2"},
-    {jesse, {git, "git@github.com:rbkmoney/jesse.git", {branch, "master"}}},
-    {pooler, "1.5.0"},
-    {rfc3339, {git, "git@github.com:rbkmoney/rfc3339.git", {branch, "master"}}}
+    {jsx,         "2.8.2"},
+    {pooler,      "1.5.0"},
+    {rfc3339,     {git, "git@github.com:rbkmoney/rfc3339.git", {branch, "master"}}},
+    {jesse,       {git, "git@github.com:rbkmoney/jesse.git", {branch, "master"}}},
+    {parse_trans, {git, "git@github.com:rbkmoney/parse_trans.git", {branch, "support-ct_expand-maps"}}}
 ]}.

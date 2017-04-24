@@ -1,4 +1,4 @@
-package io.swagger.codegen.utils;
+package io.swagger.codegen.utils.erlang;
 
 import java.io.*;
 
