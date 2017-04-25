@@ -10,8 +10,9 @@
 -export([check_value/3]).
 
 -define(DISCRIMINATOR, <<"discriminator">>).
--define(DEFINITIONS,   "definitions").
+-define(FORMAT,        <<"format">>).
 -define(REF,           <<"$ref">>).
+-define(DEFINITIONS,   "definitions").
 -define(NOT_FOUND,     not_found).
 
 -define(DISCR_ERROR(Error), {discriminator_not_valid, Error}).
@@ -56,6 +57,8 @@ check_value(Value, Attr = {?REF, Ref}, State) ->
         true -> State;
         false -> validate_ref(Value, Attr, State)
     end;
+check_value(Value, Format = {?FORMAT, _}, State) ->
+  validate_format(Value, Format, State);
 check_value(Value, Attr, State) ->
     jesse_validator_draft4:check_value(Value, Attr, State).
 
@@ -76,6 +79,23 @@ validate_child_schema(Value, SchemaName, State) ->
         throw:[{schema_invalid, _Schema, {schema_not_found, BadRef}}] ->
             jesse_error:handle_data_invalid(?DISCR_ERROR(SchemaName), Value, State)
     end.
+
+validate_format(Value, {?FORMAT, Format}, State) when
+    Format =:= <<"int32">>  orelse
+    Format =:= <<"int64">>  orelse
+    Format =:= <<"float">>  orelse
+    Format =:= <<"byte">>   orelse
+    Format =:= <<"binary">> orelse
+    Format =:= <<"date">>
+->
+    case {{packageName}}_param_validator:validate({type, erlang:binary_to_atom(Format, utf8)}, Value) of
+        error ->
+            jesse_error:handle_data_invalid(wrong_format, Value, State);
+        _ ->
+            State
+    end;
+validate_format(Value, Format, State) ->
+    jesse_validator_draft4:check_value(Value, Format, State).
 
 validate_ref(Value, Attr = {?REF, Ref} , State) ->
     Path = jesse_state:get_current_path(State),
@@ -116,8 +136,13 @@ map_error_reason({'data_invalid', _Schema, Error, _Data, Path0}) ->
 get_error_path([]) ->
     <<"">>;
 get_error_path(Path) ->
-    PreparedPath = {{packageName}}_utils:join(".", Path),
+    Mapper = fun
+        (N) when is_integer(N) -> {{packageName}}_utils:to_binary(N);
+        (X)                    -> X
+    end,
+    PreparedPath = {{packageName}}_utils:join(".", lists:map(Mapper, Path)),
     <<" Path to item: ", PreparedPath/binary>>.
+
 get_error_description(all_schemas_not_valid) ->
     <<"Schema rule \"AllOf\" violated">>;
 get_error_description(any_schemas_not_valid) ->
@@ -418,6 +443,26 @@ legal_status_minor_flag_missing_test() ->
         }
     }">>,
     ?assertEqual(expect(all_schemas_not_valid, [<<"owner">>]), test_validate(Pet, ?PET, ?PET_SCHEMA)).
+
+-spec exceed_int32_swagger_format_test() -> _.
+exceed_int32_swagger_format_test() ->
+    Pet = <<"{
+        \"type\":     \"Dog\",
+        \"name\":     \"Rex\",
+        \"packSize\": 2147483650,
+        \"owner\": {
+            \"type\":      \"Person\",
+            \"soleOwner\": true,
+            \"name\":      \"Robin\",
+            \"age\":       12,
+            \"sex\":       \"male\",
+            \"legalStatus\": {
+                \"status\": \"Single\",
+                \"minor\":  true
+            }
+        }
+    }">>,
+    ?assertEqual(expect(all_schemas_not_valid, []), test_validate(Pet, ?PET, ?PET_SCHEMA)).
 
 -spec good_predicate_test() -> _.
 good_predicate_test() ->
