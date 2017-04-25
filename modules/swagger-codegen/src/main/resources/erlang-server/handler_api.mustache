@@ -208,9 +208,14 @@ get_value(body, _Name, Req0) ->
             {error, Message, Req}
     end;
 get_value(qs_val, Name, Req0) ->
-    {QS, Req} = cowboy_req:qs_vals(Req0),
-    Value     = {{packageName}}_utils:get_opt({{packageName}}_utils:to_qs(Name), QS),
-    {ok, Value, Req};
+    try cowboy_req:qs_vals(Req0) of
+        {QS, Req} ->
+            Value = {{packageName}}_utils:get_opt({{packageName}}_utils:to_qs(Name), QS),
+            {ok, Value, Req}
+    catch
+        error:_ ->
+            {error, <<"Invalid query">>}
+    end;
 get_value(header, Name, Req0) ->
     {Headers, Req} = cowboy_req:headers(Req0),
     Value          = {{packageName}}_utils:get_opt({{packageName}}_utils:to_header(Name), Headers),

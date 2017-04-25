@@ -185,6 +185,8 @@ get_error_description(wrong_size) ->
     <<"Wrong size">>;
 get_error_description(wrong_type) ->
     <<"Wrong type">>;
+get_error_description(wrong_format) ->
+    <<"Wrong format">>;
 get_error_description(?DISCR_ERROR(SchemaName)) ->
     <<"Discriminator child schema ", SchemaName/binary, " doesn't exist">>.
 
