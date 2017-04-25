@@ -100,7 +100,7 @@ validate({type, 'boolean'},  Value) when is_boolean(Value) ->
 validate({type, 'boolean'}, Value) ->
     V = {{packageName}}_utils:to_lower(Value),
     try
-        case binary_to_existing_atom(V, utf8) of
+        case {{packageName}}_utils:binary_to_existing_atom(V, utf8) of
             B when is_boolean(B) -> {ok, B};
             _ -> error
         end
@@ -125,7 +125,7 @@ validate({type, 'datetime'}, Value) ->
 
 validate({enum, Values}, Value) ->
     try
-        FormattedValue = erlang:binary_to_existing_atom(Value, utf8),
+        FormattedValue = {{packageName}}_utils:binary_to_existing_atom(Value, utf8),
         case lists:member(FormattedValue, Values) of
             true -> {ok, FormattedValue};
             false -> error
