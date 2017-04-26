@@ -1,9 +1,6 @@
 package io.swagger.codegen.languages;
 
-//import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.JsonProcessingException;
-//import com.fasterxml.jackson.databind.SerializerProvider;
-//import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
@@ -14,10 +11,6 @@ import io.swagger.codegen.utils.erlang.*;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-
-//import com.fasterxml.jackson.core.*;
-//import com.fasterxml.jackson.databind.*;
 
 import java.io.File;
 import java.util.*;
