@@ -184,6 +184,21 @@ public class ErlangServerCodegen extends DefaultCodegen implements CodegenConfig
     }
 
     /**
+     * If the pattern contains "/" in the beginning or in the end
+     * remove those "/" symbols.
+     *
+     * @param pattern the pattern (regular expression)
+     * @return the pattern with delimiter
+     */
+    @Override
+    public String addRegularExpressionDelimiter(String pattern) {
+        if (pattern != null) {
+            return pattern.replaceAll("^/","").replaceAll("/$","");
+        }
+        return pattern;
+    }
+
+    /**
      * Location to write api files.  You can use the apiPackage() as defined when the class is
      * instantiated
      */
