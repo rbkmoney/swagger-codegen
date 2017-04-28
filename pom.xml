@@ -866,7 +866,7 @@
         <module>modules/swagger-codegen</module>
         <module>modules/swagger-codegen-cli</module>
         <module>modules/swagger-codegen-maven-plugin</module>
-        <module>modules/swagger-generator</module>
+        <!--<module>modules/swagger-generator</module>-->
     </modules>
     <reporting>
         <outputDirectory>target/site</outputDirectory>
