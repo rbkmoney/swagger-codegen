@@ -263,7 +263,7 @@ get_request_spec('{{operationId}}') ->
     ];
 {{/operation}}{{/operations}}
 get_request_spec(OperationID) ->
-    error({unknown_operation, OperationID}).
+    error({invalid_operation_id, OperationID}).
 
 -spec get_response_spec(OperationID :: {{packageName}}:operation_id(), Code :: cowboy:http_status()) ->
     Spec :: {{packageName}}_handler_api:response_spec() | no_return().
@@ -273,4 +273,4 @@ get_response_spec('{{operationId}}', {{code}}) ->
     {{#dataType}}{'{{dataType}}', '{{baseType}}'};{{/dataType}}{{^dataType}}undefined;{{/dataType}}
 {{/responses}}{{/operation}}{{/operations}}
 get_response_spec(OperationID, Code) ->
-    error({unknown_operation, OperationID, Code}).
+    error({invalid_response_code, OperationID, Code}).
