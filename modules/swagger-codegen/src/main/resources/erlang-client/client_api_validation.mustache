@@ -26,8 +26,8 @@ request_params('{{operationId}}') ->
     ];
 {{/operation}}{{/operations}}{{/apis}}{{/apiInfo}}
 
-request_params(_) ->
-    error(unknown_operation).
+request_params(OperationID) ->
+    error({invalid_operation_id, OperationID}).
 
 -type rule() ::
     {type, 'binary'} |
@@ -61,7 +61,7 @@ request_param_info('{{operationId}}', {{^isBodyParam}}'{{baseName}}'{{/isBodyPar
 {{/allParams}}{{/operation}}{{/operations}}{{/apis}}{{/apiInfo}}
 
 request_param_info(OperationID, Name) ->
-    error({unknown_param, OperationID, Name}).
+    error({invalid_request_param, OperationID, Name}).
 
 %%%
 
@@ -233,7 +233,7 @@ validate(Rule = schema, Name, Value) ->
 
 validate(Rule, Name, _Value) ->
     error_logger:info_msg("Can't validate ~p with ~p", [Name, Rule]),
-    error({unknown_validation_rule, Rule}).
+    error({invalid_validation_rule, Rule}).
 
 -spec parse_collection_value(Format :: 'csv' | 'ssv' | 'tsv' | 'pipes', binary()) -> Values :: [binary()].
 
