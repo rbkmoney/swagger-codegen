@@ -267,7 +267,7 @@ prepare_body(Body) ->
     end.
 
 validator_opts() ->
-    {{packageName}}_jesse_validator_swagger_2_0:options().
+    [{validator, ?MODULE}, {allowed_errors, 0}].
 
 binary_to_lower(V) when is_binary(V) ->
     list_to_binary(string:to_lower({{packageName}}_client_api_utils:to_list(V))).

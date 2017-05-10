@@ -62,33 +62,10 @@ populate_request_params(OperationID, [FieldParams | T], RequestParams) ->
 populate_request_param(OperationID, Name, RequestParams0) ->
     #{rules := Rules, source := Source} = {{packageName}}_client_api_validation:request_param_info(OperationID, Name),
     {Value, RequestParams} = get_value(Source, Name, RequestParams0),
-    case prepare_param(Rules, Name, Value) of
+    case {{packageName}}_validation:prepare_request_param(Rules, Name, Value) of
         {ok, Result} -> {ok, Name, Result, RequestParams};
         {error, Reason} ->
             {error, Reason, RequestParams0}
-    end.
-
-prepare_param(Rules, Name, Value) ->
-    try
-        Result = lists:foldl(
-            fun(Rule, Acc) ->
-                case {{packageName}}_client_api_validation:validate(
-                         Rule,
-                         Name,
-                         Acc
-                     )
-                of
-                    ok -> Acc;
-                    {ok, Prepared} -> Prepared
-                end
-            end,
-            Value,
-            Rules
-        ),
-        {ok, Result}
-    catch
-        throw:Reason ->
-            {error, Reason}
     end.
 
 -spec get_value(atom(), any(), params()) ->
