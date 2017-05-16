@@ -115,7 +115,7 @@ public class ErlangClientCodegen extends DefaultCodegen implements CodegenConfig
          * it will be processed by the template engine.  Otherwise, it will be copied
          */
         supportingFiles.add(new SupportingFile("client_api_utils.mustache", "", toSourceFilePath("client_api_utils", "erl")));
-        supportingFiles.add(new SupportingFile("client_api_validation.mustache", "", toSourceFilePath("client_api_validation", "erl")));
+        supportingFiles.add(new SupportingFile("client_api_params.mustache", "", toSourceFilePath("client_api_params", "erl")));
         supportingFiles.add(new SupportingFile("client_api_procession.mustache", "", toSourceFilePath("client_api_procession", "erl")));
 
         supportingFiles.add(new SupportingFile("utils.mustache", "", toSourceFilePath("utils", "erl")));
