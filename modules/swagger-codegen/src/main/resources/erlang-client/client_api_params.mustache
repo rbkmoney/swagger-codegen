@@ -3,10 +3,9 @@
 -export([request_params/1]).
 -export([request_param_info/2]).
 
--type operation_id()  :: atom().
--type request_param() :: atom().
-
--export_type([operation_id/0]).
+-type operation_id()  :: {{packageName}}:operation_id().
+-type request_param() :: {{packageName}}:param_name().
+-type rule()          :: {{packageName}}_validation:rule().
 
 -spec request_params(OperationID :: operation_id()) -> [Param :: request_param()].
 {{#apiInfo}}{{#apis}}{{#operations}}{{#operation}}
@@ -19,23 +18,6 @@ request_params('{{operationId}}') ->
 
 request_params(OperationID) ->
     error({invalid_operation_id, OperationID}).
-
--type rule() ::
-    {type, 'binary'} |
-    {type, 'integer'} |
-    {type, 'float'} |
-    {type, 'binary'} |
-    {type, 'boolean'} |
-    {type, 'date'} |
-    {type, 'datetime'} |
-    {enum, [atom()]} |
-    {max, Max :: number(), Type :: exclusive | inclusive} |
-    {min, Min :: number(), Type :: exclusive | inclusive} |
-    {max_length, MaxLength :: integer()} |
-    {min_length, MaxLength :: integer()} |
-    {pattern, Pattern :: string()} |
-    schema |
-    {required, boolean()}.
 
 -spec request_param_info(OperationID :: operation_id(), Name :: request_param()) -> #{
     source => qs_val | binding | header | body,
