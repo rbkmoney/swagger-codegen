@@ -11,6 +11,7 @@ import com.google.common.collect.Multimap;
 import io.swagger.codegen.*;
 import io.swagger.models.*;
 import io.swagger.util.Json;
+import io.swagger.codegen.utils.erlang.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -80,25 +81,23 @@ public class ErlangClientCodegen extends DefaultCodegen implements CodegenConfig
         typeMapping.clear();
         typeMapping.put("enum", "binary");
         typeMapping.put("date", "date");
-        typeMapping.put("datetime", "datetime");
+        typeMapping.put("DateTime", "datetime");
         typeMapping.put("boolean", "boolean");
         typeMapping.put("string", "binary");
-        typeMapping.put("integer", "integer");
-        typeMapping.put("int", "integer");
-        typeMapping.put("float", "integer");
-        typeMapping.put("long", "integer");
+        typeMapping.put("char", "binary");
+        typeMapping.put("integer", "int32");
+        typeMapping.put("float", "float");
+        typeMapping.put("long", "int64");
         typeMapping.put("double", "float");
         typeMapping.put("array", "list");
         typeMapping.put("map", "map");
-        typeMapping.put("number", "integer");
-        typeMapping.put("bigdecimal", "float");
+        typeMapping.put("number", "float");
         typeMapping.put("List", "list");
         typeMapping.put("object", "object");
         typeMapping.put("file", "file");
         typeMapping.put("binary", "binary");
-        typeMapping.put("bytearray", "binary");
-        typeMapping.put("byte", "binary");
-        typeMapping.put("uuid", "binary");
+        typeMapping.put("ByteArray", "byte");
+        typeMapping.put("UUID", "binary");
         typeMapping.put("password", "binary");
 
         cliOptions.clear();
@@ -116,10 +115,15 @@ public class ErlangClientCodegen extends DefaultCodegen implements CodegenConfig
          * it will be processed by the template engine.  Otherwise, it will be copied
          */
         supportingFiles.add(new SupportingFile("client_api_utils.mustache", "", toSourceFilePath("client_api_utils", "erl")));
-        supportingFiles.add(new SupportingFile("client_api_validation.mustache", "", toSourceFilePath("client_api_validation", "erl")));
+        supportingFiles.add(new SupportingFile("client_api_params.mustache", "", toSourceFilePath("client_api_params", "erl")));
         supportingFiles.add(new SupportingFile("client_api_procession.mustache", "", toSourceFilePath("client_api_procession", "erl")));
-        supportingFiles.add(new SupportingFile("jesse_validator_swagger_2_0.mustache", "",  toSourceFilePath("jesse_validator_swagger_2_0", "erl")));
-        supportingFiles.add(new SupportingFile("swagger.mustache", "", toPrivFilePath("swagger", "json")));
+
+        supportingFiles.add(new SupportingFile("utils.mustache", "", toSourceFilePath("utils", "erl")));
+        supportingFiles.add(new SupportingFile("types.mustache", "", toPackageNameSrcFile("erl")));
+        supportingFiles.add(new SupportingFile("validation.mustache", "", toSourceFilePath("validation", "erl")));
+        supportingFiles.add(new SupportingFile("param_validator.mustache", "", toSourceFilePath("param_validator", "erl")));
+        supportingFiles.add(new SupportingFile("schema_validator.mustache", "", toSourceFilePath("schema_validator", "erl")));
+        supportingFiles.add(new SupportingFile("schema.mustache", "", toSourceFilePath("schema", "erl")));
     }
 
     @Override
@@ -224,10 +228,10 @@ public class ErlangClientCodegen extends DefaultCodegen implements CodegenConfig
 
     @Override
     public Map<String, Object> postProcessSupportingFileData(Map<String, Object> objs) {
-        Swagger swagger = (Swagger)objs.get("swagger");
-        if(swagger != null) {
+        Swagger swagger = (Swagger) objs.get("swagger");
+        if (swagger != null) {
             try {
-                objs.put("swagger-json", Json.mapper().writeValueAsString(swagger));
+                objs.put("swagger-json", Json.mapper().writer(new ErlangJsonPrinter()).with(new ErlangJsonFactory()).writeValueAsString(swagger));
             } catch (JsonProcessingException e) {
                 LOGGER.error(e.getMessage(), e);
             }
@@ -249,5 +253,9 @@ public class ErlangClientCodegen extends DefaultCodegen implements CodegenConfig
 
     protected String toPrivFilePath(String name, String extension) {
         return "priv" + File.separator + name + "." + extension;
+    }
+
+    protected String toPackageNameSrcFile(String extension) {
+        return "src" + File.separator + this.packageName + "." + extension;
     }
 }
