@@ -34,7 +34,7 @@ validate(Value, DefName) ->
     validate(Value, DefName, {{packageName}}_schema:get()).
 
 validate(Value, DefName, Schema) ->
-    case jesse:validate_definition({{packageName}}_client_api_utils:to_list(DefName), Schema, Value, options()) of
+    case jesse:validate_definition({{packageName}}_utils:to_list(DefName), Schema, Value, options()) of
         {ok, _} ->
             ok;
         {error, [Error]} ->
@@ -76,7 +76,7 @@ validate_discriminator(Value, DiscrField, State) when is_binary(DiscrField) ->
 
 validate_child_schema(Value, SchemaName, State) ->
     Ref    = <<"#/" ?DEFINITIONS "/", SchemaName/binary>>,
-    BadRef = {{packageName}}_client_api_utils:to_list(Ref),
+    BadRef = {{packageName}}_utils:to_list(Ref),
     Schema = make_ref_schema(Ref),
     try jesse_schema_validator:validate_with_state(Schema, Value, State)
     catch
@@ -154,14 +154,14 @@ options() ->
 map_error_reason({'data_invalid', _Schema, Error, Data, Path0}) ->
     Path = get_error_path(Path0),
     Description = get_error_description(Error, Data),
-    {{packageName}}_client_api_utils:join(".", [Description, Path]).
+    {{packageName}}_utils:join(".", [Description, Path]).
 
 get_error_path([]) ->
     <<"">>;
 get_error_path(Path0) ->
     Mapper = fun
         (N, Acc) when is_integer(N) ->
-            ["[", {{packageName}}_client_api_utils:to_binary(N), "]" | Acc];
+            ["[", {{packageName}}_utils:to_binary(N), "]" | Acc];
         (X, Acc) ->
             [$., X | Acc]
     end,
@@ -169,16 +169,16 @@ get_error_path(Path0) ->
         [$.| Path1] -> Path1;
         Path1       -> Path1
     end,
-    Path3 = {{packageName}}_client_api_utils:to_binary(Path2),
+    Path3 = {{packageName}}_utils:to_binary(Path2),
     <<" Path to item: ", Path3/binary>>.
 
 get_error_description(any_schemas_not_valid, _Value) ->
     <<"Schema rule \"AnyOf\" violated">>;
 get_error_description({missing_dependency, Dependency0}, _Value) ->
-    Dependency = {{packageName}}_client_api_utils:to_binary(Dependency0),
+    Dependency = {{packageName}}_utils:to_binary(Dependency0),
     <<"Missing dependency: ", Dependency/binary>>;
 get_error_description(missing_required_property, Value) ->
-    PropertyName = {{packageName}}_client_api_utils:to_binary(Value),
+    PropertyName = {{packageName}}_utils:to_binary(Value),
     <<"Missing required property: ", PropertyName/binary>>;
 get_error_description(no_extra_items_allowed, _Value) ->
     <<"Extra items not allowed">>;

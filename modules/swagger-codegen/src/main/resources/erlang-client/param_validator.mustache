@@ -56,7 +56,7 @@ validate({'list', Format, Ruleset}, Value) ->
 
 validate({type, 'int64'}, Value0) ->
     try
-        Value = {{packageName}}_client_api_utils:to_int(Value0),
+        Value = {{packageName}}_utils:to_int(Value0),
         ok = validate_between(Value, -9223372036854775808, 922337203685477580),
         {ok, Value}
     catch
@@ -66,7 +66,7 @@ validate({type, 'int64'}, Value0) ->
 
 validate({type, 'int32'}, Value0) ->
     try
-        Value = {{packageName}}_client_api_utils:to_int(Value0),
+        Value = {{packageName}}_utils:to_int(Value0),
         ok = validate_between(Value, -2147483648, 2147483647),
         {ok, Value}
     catch
@@ -76,7 +76,7 @@ validate({type, 'int32'}, Value0) ->
 
 validate({type, 'float'}, Value) ->
     try
-        {ok, {{packageName}}_client_api_utils:to_float(Value)}
+        {ok, {{packageName}}_utils:to_float(Value)}
     catch
         error:badarg ->
             error
@@ -99,9 +99,9 @@ validate({type, 'boolean'},  Value) when is_boolean(Value) ->
     {ok, Value};
 
 validate({type, 'boolean'}, Value) ->
-    V = {{packageName}}_client_api_utils:to_lower(Value),
+    V = {{packageName}}_utils:to_lower(Value),
     try
-        case {{packageName}}_client_api_utils:binary_to_existing_atom(V, utf8) of
+        case {{packageName}}_utils:binary_to_existing_atom(V, utf8) of
             B when is_boolean(B) -> {ok, B};
             _ -> error
         end
@@ -126,7 +126,7 @@ validate({type, 'datetime'}, Value) ->
 
 validate({enum, Values}, Value) ->
     try
-        FormattedValue = {{packageName}}_client_api_utils:binary_to_existing_atom(Value, utf8),
+        FormattedValue = {{packageName}}_utils:binary_to_existing_atom(Value, utf8),
         case lists:member(FormattedValue, Values) of
             true -> {ok, FormattedValue};
             false -> error

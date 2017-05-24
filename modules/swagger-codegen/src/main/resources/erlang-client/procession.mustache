@@ -1,4 +1,5 @@
--module({{packageName}}_client_api_procession).
+%% -*- mode: erlang -*-
+-module({{packageName}}_procession).
 
 -type state() :: #{
     operation_id := operation_id()
@@ -46,7 +47,7 @@ handle_request_json(RequestParams, #{operation_id := OperationID}) ->
 -spec populate_request(operation_id(), params()) ->
     {ok, Params :: map()} | {error, Reason :: any(), Req :: term()}.
 populate_request(OperationID, RequestParams) ->
-    Params = {{packageName}}_client_api_params:request_params(OperationID),
+    Params = {{packageName}}_params:request_params(OperationID),
     populate_request_params(OperationID, Params, RequestParams).
 
 populate_request_params(_, [], RequestParams) ->
@@ -60,7 +61,7 @@ populate_request_params(OperationID, [FieldParams | T], RequestParams) ->
     end.
 
 populate_request_param(OperationID, Name, RequestParams0) ->
-    #{rules := Rules, source := Source} = {{packageName}}_client_api_params:request_param_info(OperationID, Name),
+    #{rules := Rules, source := Source} = {{packageName}}_params:request_param_info(OperationID, Name),
     {Value, RequestParams} = get_value(Source, Name, RequestParams0),
     case {{packageName}}_validation:prepare_request_param(Rules, Name, Value) of
         {ok, Result} -> {ok, Name, Result, RequestParams};
@@ -75,15 +76,15 @@ get_value(body, _Name, RequestParams) ->
     {Value, RequestParams};
 get_value(qs_val, Name, RequestParams) ->
     QueryParams = maps:get(qs_val, RequestParams),
-    Value = get_opt({{packageName}}_client_api_utils:to_binary(Name), QueryParams),
+    Value = get_opt({{packageName}}_utils:to_binary(Name), QueryParams),
     {Value, RequestParams};
 get_value(header, Name, RequestParams) ->
     HeaderParams = maps:get(header, RequestParams),
-    Value = get_opt({{packageName}}_client_api_utils:to_binary(Name), HeaderParams),
+    Value = get_opt({{packageName}}_utils:to_binary(Name), HeaderParams),
     {Value, RequestParams};
 get_value(binding, Name, RequestParams) ->
     BindingParams = maps:get(binding, RequestParams),
-    Value = get_opt({{packageName}}_client_api_utils:to_binary(Name), BindingParams),
+    Value = get_opt({{packageName}}_utils:to_binary(Name), BindingParams),
     {Value, RequestParams}.
 
 
@@ -95,4 +96,4 @@ get_opt(Key, Opts, Default) ->
 
 
 prepare_url(Url, Params, Qs) ->
-    {{packageName}}_client_api_utils:fill_url(Url, Params, Qs).
+    {{packageName}}_utils:fill_url(Url, Params, Qs).
