@@ -1,3 +1,4 @@
+%% -*- mode: erlang -*-
 -module({{packageName}}_utils).
 
 -export([to_binary/1]).
@@ -20,45 +21,56 @@
 -export([join/2]).
 
 
--spec to_binary(iodata() | atom() | number()) -> binary().
+-spec to_binary(iodata() | atom() | number()) -> binary() | no_return().
 
 to_binary(V) when is_binary(V)  -> V;
 to_binary(V) when is_list(V)    -> iolist_to_binary(V);
 to_binary(V) when is_atom(V)    -> atom_to_binary(V, utf8);
 to_binary(V) when is_integer(V) -> integer_to_binary(V);
-to_binary(V) when is_float(V)   -> float_to_binary(V).
+to_binary(V) when is_float(V)   -> float_to_binary(V);
+to_binary(_)                    -> erlang:error(badarg).
 
--spec to_list(iodata() | atom() | number()) -> string().
+
+-spec to_list(iodata() | atom() | number()) -> string() | no_return().
 
 to_list(V) when is_list(V)      -> V;
 to_list(V)                      -> binary_to_list(to_binary(V)).
 
--spec to_float(iodata() | number()) -> float().
+-spec to_float(iodata() | number()) -> float() | no_return().
 
 to_float(V) when is_integer(V) -> float(V);
 to_float(V) when is_float(V)   -> V;
 
 to_float(V) ->
-    Data = iolist_to_binary([V]),
-    case binary:split(Data, <<$.>>) of
-        [Data] ->
-            float(binary_to_integer(Data));
-        [<<>>, _] ->
-            binary_to_float(<<$0, Data/binary>>);
+    try
+        Data = iolist_to_binary([V]),
+        case binary:split(Data, <<$.>>) of
+            [Data] ->
+                float(binary_to_integer(Data));
+            [<<>>, _] ->
+                binary_to_float(<<$0, Data/binary>>);
+            _ ->
+                binary_to_float(Data)
+        end
+    catch
         _ ->
-            binary_to_float(Data)
+            erlang:error(badarg)
     end.
+
 
 %%
 
--spec to_int(integer() | binary() | list()) -> integer().
+-spec to_int(integer() | binary() | list()) -> integer() | no_return().
 
 to_int(Data) when is_integer(Data) ->
     Data;
 to_int(Data) when is_binary(Data) ->
     binary_to_integer(Data);
 to_int(Data) when is_list(Data) ->
-    list_to_integer(Data).
+    list_to_integer(Data);
+to_int(_) ->
+    erlang:error(badarg).
+
 
 -spec set_resp_headers([{binary(), iodata()}], cowboy_req:req()) -> cowboy_req:req().
 
@@ -160,13 +172,17 @@ to_case(_Case, <<>>, Acc) ->
     Acc;
 
 to_case(_Case, <<C, _/binary>>, _Acc) when C > 127 ->
-    error(badarg);
+    erlang:error(badarg);
 
 to_case(Case = lower, <<C, Rest/binary>>, Acc) ->
     to_case(Case, Rest, <<Acc/binary, (to_lower_char(C))>>);
 
 to_case(Case = upper, <<C, Rest/binary>>, Acc) ->
-    to_case(Case, Rest, <<Acc/binary, (to_upper_char(C))>>).
+    to_case(Case, Rest, <<Acc/binary, (to_upper_char(C))>>);
+
+to_case(_, _, _) ->
+    erlang:error(badarg).
+
 
 to_lower_char(C) when is_integer(C), $A =< C, C =< $Z ->
     C + 32;
