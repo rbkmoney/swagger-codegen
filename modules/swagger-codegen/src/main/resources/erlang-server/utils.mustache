@@ -21,7 +21,7 @@
 -export([join/2]).
 
 
--spec to_binary(iodata() | atom() | number()) -> binary() | no_return().
+-spec to_binary(iodata() | atom() | number()) -> binary().
 
 to_binary(V) when is_binary(V)  -> V;
 to_binary(V) when is_list(V)    -> iolist_to_binary(V);
@@ -30,37 +30,29 @@ to_binary(V) when is_integer(V) -> integer_to_binary(V);
 to_binary(V) when is_float(V)   -> float_to_binary(V);
 to_binary(_)                    -> erlang:error(badarg).
 
-
--spec to_list(iodata() | atom() | number()) -> string() | no_return().
+-spec to_list(iodata() | atom() | number()) -> string().
 
 to_list(V) when is_list(V)      -> V;
 to_list(V)                      -> binary_to_list(to_binary(V)).
 
--spec to_float(iodata() | number()) -> float() | no_return().
+-spec to_float(iodata() | number()) -> float().
 
 to_float(V) when is_integer(V) -> float(V);
 to_float(V) when is_float(V)   -> V;
-
 to_float(V) ->
-    try
-        Data = iolist_to_binary([V]),
-        case binary:split(Data, <<$.>>) of
-            [Data] ->
-                float(binary_to_integer(Data));
-            [<<>>, _] ->
-                binary_to_float(<<$0, Data/binary>>);
-            _ ->
-                binary_to_float(Data)
-        end
-    catch
+    Data = iolist_to_binary([V]),
+    case binary:split(Data, <<$.>>) of
+        [Data] ->
+            float(binary_to_integer(Data));
+        [<<>>, _] ->
+            binary_to_float(<<$0, Data/binary>>);
         _ ->
-            erlang:error(badarg)
+            binary_to_float(Data)
     end.
-
 
 %%
 
--spec to_int(integer() | binary() | list()) -> integer() | no_return().
+-spec to_int(integer() | binary() | list()) -> integer().
 
 to_int(Data) when is_integer(Data) ->
     Data;
@@ -70,7 +62,6 @@ to_int(Data) when is_list(Data) ->
     list_to_integer(Data);
 to_int(_) ->
     erlang:error(badarg).
-
 
 -spec set_resp_headers([{binary(), iodata()}], cowboy_req:req()) -> cowboy_req:req().
 
@@ -97,7 +88,7 @@ to_binding(Name) ->
     Prepared = to_binary(Name),
     binary_to_atom(Prepared, utf8).
 
--spec binary_to_existing_atom(binary(), latin1 | unicode | utf8) -> atom() | no_return().
+-spec binary_to_existing_atom(binary(), latin1 | unicode | utf8) -> atom().
 binary_to_existing_atom(Bin, Encoding) when is_binary(Bin) ->
     try erlang:binary_to_existing_atom(Bin, Encoding)
     catch

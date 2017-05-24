@@ -158,21 +158,25 @@ map_error_reason({'data_invalid', _Schema, Error, Data, Path0}) ->
 
 get_error_path([]) ->
     <<"">>;
-get_error_path(Path) ->
+get_error_path(Path0) ->
     Mapper = fun
         (N, Acc) when is_integer(N) ->
             ["[", {{packageName}}_utils:to_binary(N), "]" | Acc];
         (X, Acc) ->
             [$., X | Acc]
     end,
-    PreparedPath = {{packageName}}_utils:to_binary(lists:nthtail(1, lists:foldr(Mapper, [], Path))),
-    <<" Path to item: ", PreparedPath/binary>>.
+    Path2 = case lists:foldr(Mapper, [], Path0) of
+        [$.| Path1] -> Path1;
+        Path1       -> Path1
+    end,
+    Path3 = {{packageName}}_utils:to_binary(Path2),
+    <<" Path to item: ", Path3/binary>>.
 
 get_error_description(any_schemas_not_valid, _Value) ->
     <<"Schema rule \"AnyOf\" violated">>;
 get_error_description({missing_dependency, Dependency0}, _Value) ->
     Dependency = {{packageName}}_utils:to_binary(Dependency0),
-    <<"Missing dependency \"", Dependency/binary>>;
+    <<"Missing dependency: ", Dependency/binary>>;
 get_error_description(missing_required_property, Value) ->
     PropertyName = {{packageName}}_utils:to_binary(Value),
     <<"Missing required property: ", PropertyName/binary>>;
