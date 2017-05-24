@@ -1,3 +1,4 @@
+%% -*- mode: erlang -*-
 -module({{packageName}}_schema).
 
 -export([get/0]).
@@ -98,12 +99,12 @@ get_raw() ->
   <<"{\"definitions\": {
        \"Pet\": {
          \"type\":          \"object\",
-         \"discriminator\": \"type\",
+         \"discriminator\": \"petType\",
          \"properties\": {
-            \"name\": {\"type\": \"string\"},
-            \"type\": {\"type\": \"string\"}
+            \"name\":    {\"type\": \"string\"},
+            \"petType\": {\"type\": \"string\"}
          },
-         \"required\": [\"name\", \"type\"]
+         \"required\": [\"name\", \"petType\"]
        },
        \"Cat\": {
          \"description\": \"A representation of a cat\",
@@ -142,66 +143,33 @@ get_raw() ->
          ],
          \"required\": [\"packSize\"]
        },
-       \"Owner\": {
-         \"type\":          \"object\",
-         \"discriminator\": \"type\",
-         \"properties\": {
-            \"soleOwner\": {\"type\": \"boolean\"},
-            \"type\": {\"type\": \"string\"}
-         },
-         \"required\": [\"soleOwner\", \"type\"]
-       },
-       \"Family\": {
-         \"allOf\": [
-           {\"$ref\": \"#/definitions/Owner\"},
-           {
-             \"type\":       \"object\",
-             \"properties\": {
-               \"members\": {
-                 \"type\":  \"array\",
-                 \"items\": {\"$ref\": \"#/definitions/Person\"},
-                 \"minItems\": 1
-               }
-             },
-             \"required\": [\"members\"]
-           }
-         ]
-       },
        \"Person\": {
-         \"allOf\": [
-           {\"$ref\": \"#/definitions/Owner\"},
-           {
-             \"type\":       \"object\",
-             \"properties\": {
-               \"name\": {\"type\": \"string\"},
-               \"age\":  {
-                 \"type\":    \"integer\",
-                 \"minimum\": 0,
-                 \"maximum\": 150
-               },
-               \"sex\": {
-                 \"type\": \"string\",
-                 \"enum\": [\"male\", \"female\"]
-               },
-               \"legalStatus\": {\"$ref\": \"#/definitions/LegalStatus\"}
-             },
-             \"required\": [\"age\", \"sex\"]
-           }
-         ]
-       },
-       \"LegalStatus\": {
          \"type\":          \"object\",
-         \"discriminator\": \"status\",
+         \"discriminator\": \"personType\",
          \"properties\": {
-            \"status\": {\"type\": \"string\"}
+           \"name\": {\"type\": \"string\"},
+           \"sex\": {
+             \"type\": \"string\",
+             \"enum\": [\"male\", \"female\"]
+           },
+           \"personType\": {\"type\": \"string\"}
          },
-         \"required\": [\"status\"]
+         \"required\": [\"name\", \"sex\", \"personType\"]
        },
        \"WildMix\": {
          \"allOf\": [
-           {\"$ref\": \"#/definitions/Cat\"},
+           {\"$ref\": \"#/definitions/Pet\"},
            {\"$ref\": \"#/definitions/Person\"}
-         ]
+         ],
+       },
+       \"Dummy\": {
+         \"type\":          \"object\",
+         \"discriminator\": \"dummyType\",
+         \"properties\": {
+           \"name\":      {\"type\": \"string\"},
+           \"dummyType\": {\"type\": \"string\"}
+         },
+         \"required\": [\"name\", \"dummyType\"]
        }
      }}">>).
 
@@ -213,9 +181,9 @@ get_enum(Parent, Discr, Schema) ->
 enumerate_discriminator_children_test() ->
     Schema      = jsx:decode(?SCHEMA, [return_maps]),
     FixedSchema = enumerate_discriminator_children(Schema),
-    ?assertEqual(lists:sort([<<"Dog">>, <<"Cat">>]),       get_enum(<<"Pet">>,         <<"type">>,   FixedSchema)),
-    ?assertEqual(lists:sort([<<"Family">>, <<"Person">>]), get_enum(<<"Owner">>,       <<"type">>,   FixedSchema)),
-    ?assertEqual([],                                       get_enum(<<"LegalStatus">>, <<"status">>, FixedSchema)).
+    ?assertEqual(lists:sort([<<"Dog">>, <<"Cat">>, <<"WildMix">>]), get_enum(<<"Pet">>, <<"petType">>, FixedSchema)),
+    ?assertEqual([<<"WildMix">>], get_enum(<<"Person">>,  <<"personType">>, FixedSchema)),
+    ?assertEqual([],              get_enum(<<"Dummy">>,   <<"dummyType">>,  FixedSchema)).
 
 -spec get_test() -> _.
 get_test() ->
@@ -223,5 +191,4 @@ get_test() ->
        enumerate_discriminator_children(maps:with([?DEFINITIONS], get_raw())),
        ?MODULE:get()
     ).
-
 -endif.

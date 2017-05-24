@@ -1,3 +1,4 @@
+%% -*- mode: erlang -*-
 -module({{packageName}}_handler_api).
 
 -export([authorize_api_key/5]).
@@ -90,7 +91,7 @@ validate_response(Spec, RespBody) ->
         ok ->
             ok;
         {error, Error} ->
-            erlang:error({response_validation_failed, Error})
+            erlang:error({response_validation_failed, Error, RespBody})
     end.
 
 -spec encode_response(Resp :: {{packageName}}_logic_handler:response()) ->

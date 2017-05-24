@@ -1,3 +1,4 @@
+%% -*- mode: erlang -*-
 -module({{packageName}}_utils).
 
 -export([to_binary/1]).
@@ -26,7 +27,8 @@ to_binary(V) when is_binary(V)  -> V;
 to_binary(V) when is_list(V)    -> iolist_to_binary(V);
 to_binary(V) when is_atom(V)    -> atom_to_binary(V, utf8);
 to_binary(V) when is_integer(V) -> integer_to_binary(V);
-to_binary(V) when is_float(V)   -> float_to_binary(V).
+to_binary(V) when is_float(V)   -> float_to_binary(V);
+to_binary(_)                    -> erlang:error(badarg).
 
 -spec to_list(iodata() | atom() | number()) -> string().
 
@@ -37,7 +39,6 @@ to_list(V)                      -> binary_to_list(to_binary(V)).
 
 to_float(V) when is_integer(V) -> float(V);
 to_float(V) when is_float(V)   -> V;
-
 to_float(V) ->
     Data = iolist_to_binary([V]),
     case binary:split(Data, <<$.>>) of
@@ -58,7 +59,9 @@ to_int(Data) when is_integer(Data) ->
 to_int(Data) when is_binary(Data) ->
     binary_to_integer(Data);
 to_int(Data) when is_list(Data) ->
-    list_to_integer(Data).
+    list_to_integer(Data);
+to_int(_) ->
+    erlang:error(badarg).
 
 -spec set_resp_headers([{binary(), iodata()}], cowboy_req:req()) -> cowboy_req:req().
 
@@ -85,7 +88,7 @@ to_binding(Name) ->
     Prepared = to_binary(Name),
     binary_to_atom(Prepared, utf8).
 
--spec binary_to_existing_atom(binary(), latin1 | unicode | utf8) -> atom() | no_return().
+-spec binary_to_existing_atom(binary(), latin1 | unicode | utf8) -> atom().
 binary_to_existing_atom(Bin, Encoding) when is_binary(Bin) ->
     try erlang:binary_to_existing_atom(Bin, Encoding)
     catch
@@ -160,13 +163,17 @@ to_case(_Case, <<>>, Acc) ->
     Acc;
 
 to_case(_Case, <<C, _/binary>>, _Acc) when C > 127 ->
-    error(badarg);
+    erlang:error(badarg);
 
 to_case(Case = lower, <<C, Rest/binary>>, Acc) ->
     to_case(Case, Rest, <<Acc/binary, (to_lower_char(C))>>);
 
 to_case(Case = upper, <<C, Rest/binary>>, Acc) ->
-    to_case(Case, Rest, <<Acc/binary, (to_upper_char(C))>>).
+    to_case(Case, Rest, <<Acc/binary, (to_upper_char(C))>>);
+
+to_case(_, _, _) ->
+    erlang:error(badarg).
+
 
 to_lower_char(C) when is_integer(C), $A =< C, C =< $Z ->
     C + 32;

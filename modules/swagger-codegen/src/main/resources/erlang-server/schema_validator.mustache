@@ -1,3 +1,4 @@
+%% -*- mode: erlang -*-
 -module({{packageName}}_schema_validator).
 
 -behaviour(jesse_schema_validator).
@@ -10,6 +11,7 @@
 -export([check_value/3]).
 
 -define(DISCRIMINATOR, <<"discriminator">>).
+-define(ALLOF,         <<"allOf">>).
 -define(FORMAT,        <<"format">>).
 -define(REF,           <<"$ref">>).
 -define(DEFINITIONS,   "definitions").
@@ -52,6 +54,8 @@ check_value(Value, {?DISCRIMINATOR, DiscrField}, State) ->
         true  -> validate_discriminator(Value, DiscrField, State);
         false -> State
     end;
+check_value(Value, {?ALLOF, Schemas}, State) ->
+  check_all_of(Value, Schemas, State);
 check_value(Value, Attr = {?REF, Ref}, State) ->
     case is_recursive_ref(Ref, State) of
         true -> State;
@@ -78,6 +82,25 @@ validate_child_schema(Value, SchemaName, State) ->
     catch
         throw:[{schema_invalid, _Schema, {schema_not_found, BadRef}}] ->
             jesse_error:handle_data_invalid(?DISCR_ERROR(SchemaName), Value, State)
+    end.
+
+check_all_of(Value, [_ | _] = Schemas, State) ->
+    check_all_of_(Value, Schemas, State);
+check_all_of(_Value, _InvalidSchemas, State) ->
+    jesse_error:handle_schema_invalid(wrong_all_of_schema_array, State).
+
+check_all_of_(_Value, [], State) ->
+    State;
+check_all_of_(Value, [Schema | Schemas], State) ->
+    check_all_of_(Value, Schemas, validate_schema(Value, Schema, State)).
+
+validate_schema(Value, Schema, State0) ->
+    case jesse_lib:is_json_object(Schema) of
+        true ->
+            State1 = jesse_state:set_current_schema(State0, Schema),
+            jesse_schema_validator:validate_with_state(Schema, Value, State1);
+        false ->
+            jesse_error:handle_schema_invalid(schema_invalid, State0)
     end.
 
 validate_format(Value, {?FORMAT, Format}, State) when
@@ -128,59 +151,66 @@ ref_tag(Ref, Path) ->
 options() ->
     [{validator, ?MODULE}, {allowed_errors, 0}].
 
-map_error_reason({'data_invalid', _Schema, Error, _Data, Path0}) ->
+map_error_reason({'data_invalid', _Schema, Error, Data, Path0}) ->
     Path = get_error_path(Path0),
-    Description = get_error_description(Error),
+    Description = get_error_description(Error, Data),
     {{packageName}}_utils:join(".", [Description, Path]).
 
 get_error_path([]) ->
     <<"">>;
-get_error_path(Path) ->
+get_error_path(Path0) ->
     Mapper = fun
-        (N) when is_integer(N) -> {{packageName}}_utils:to_binary(N);
-        (X)                    -> X
+        (N, Acc) when is_integer(N) ->
+            ["[", {{packageName}}_utils:to_binary(N), "]" | Acc];
+        (X, Acc) ->
+            [$., X | Acc]
     end,
-    PreparedPath = {{packageName}}_utils:join(".", lists:map(Mapper, Path)),
-    <<" Path to item: ", PreparedPath/binary>>.
+    Path2 = case lists:foldr(Mapper, [], Path0) of
+        [$.| Path1] -> Path1;
+        Path1       -> Path1
+    end,
+    Path3 = {{packageName}}_utils:to_binary(Path2),
+    <<" Path to item: ", Path3/binary>>.
 
-get_error_description(all_schemas_not_valid) ->
-    <<"Schema rule \"AllOf\" violated">>;
-get_error_description(any_schemas_not_valid) ->
+get_error_description(any_schemas_not_valid, _Value) ->
     <<"Schema rule \"AnyOf\" violated">>;
-get_error_description({missing_dependency, Dependency0}) ->
+get_error_description({missing_dependency, Dependency0}, _Value) ->
     Dependency = {{packageName}}_utils:to_binary(Dependency0),
-    <<"Missing dependency \"", Dependency/binary>>;
-get_error_description(missing_required_property) ->
-    <<"Missing required property">>;
-get_error_description(no_extra_items_allowed) ->
+    <<"Missing dependency: ", Dependency/binary>>;
+get_error_description(missing_required_property, Value) ->
+    PropertyName = {{packageName}}_utils:to_binary(Value),
+    <<"Missing required property: ", PropertyName/binary>>;
+get_error_description(no_extra_items_allowed, _Value) ->
     <<"Extra items not allowed">>;
-get_error_description(no_extra_properties_allowed) ->
+get_error_description(no_extra_properties_allowed, _Value) ->
     <<"Extra properties not allowed">>;
-get_error_description(no_match) ->
+get_error_description(no_match, _Value) ->
     <<"No match to pattern">>;
-get_error_description(not_found) ->
+get_error_description(not_found, _Value) ->
     <<"Not found">>;
-get_error_description(not_in_range) ->
+get_error_description(not_in_enum, _Value) ->
+    <<"Not in enum">>;
+get_error_description(not_in_range, _Value) ->
     <<"Not in range">>;
-get_error_description(not_multiple_of) ->
+get_error_description(not_multiple_of, _Value) ->
      <<"Schema rule \"MultipleOf\" violated">>;
-get_error_description(not_one_schema_valid) ->
+get_error_description(not_one_schema_valid, _Value) ->
     <<"Schema rule \"OneOf\" violated">>;
-get_error_description(not_schema_valid) ->
+get_error_description(not_schema_valid, _Value) ->
     <<"Schema rule \"Not\" violated">>;
-get_error_description(too_few_properties) ->
+get_error_description(too_few_properties, _Value) ->
     <<"Too few properties">>;
-get_error_description(too_many_properties) ->
+get_error_description(too_many_properties, _Value) ->
      <<"Too many properties">>;
-get_error_description(wrong_length) ->
+get_error_description(wrong_length, _Value) ->
     <<"Wrong length">>;
-get_error_description(wrong_size) ->
+get_error_description(wrong_size, _Value) ->
     <<"Wrong size">>;
-get_error_description(wrong_type) ->
+get_error_description(wrong_type, _Value) ->
     <<"Wrong type">>;
-get_error_description(wrong_format) ->
+get_error_description(wrong_format, _Value) ->
     <<"Wrong format">>;
-get_error_description(?DISCR_ERROR(SchemaName)) ->
+get_error_description(?DISCR_ERROR(SchemaName), _Value) ->
     <<"Discriminator child schema ", SchemaName/binary, " doesn't exist">>.
 
 
@@ -191,13 +221,12 @@ get_error_description(?DISCR_ERROR(SchemaName)) ->
   <<"{\"definitions\": {
        \"Pet\": {
          \"type\":          \"object\",
-         \"discriminator\": \"type\",
+         \"discriminator\": \"petType\",
          \"properties\": {
-            \"name\":  {\"type\": \"string\"},
-            \"owner\": {\"$ref\": \"#/definitions/Owner\"},
-            \"type\":  {\"type\": \"string\"}
+            \"name\":    {\"type\": \"string\"},
+            \"petType\": {\"type\": \"string\"}
          },
-         \"required\": [\"name\", \"type\"]
+         \"required\": [\"name\", \"petType\"]
        },
        \"Cat\": {
          \"description\": \"A representation of a cat\",
@@ -235,85 +264,6 @@ get_error_description(?DISCR_ERROR(SchemaName)) ->
            }
          ],
          \"required\": [\"packSize\"]
-       },
-       \"Owner\": {
-         \"type\":          \"object\",
-         \"discriminator\": \"type\",
-         \"properties\": {
-            \"soleOwner\": {\"type\": \"boolean\"},
-            \"type\": {\"type\": \"string\"}
-         },
-         \"required\": [\"soleOwner\", \"type\"]
-       },
-       \"Family\": {
-         \"allOf\": [
-           {\"$ref\": \"#/definitions/Owner\"},
-           {
-             \"type\":       \"object\",
-             \"properties\": {
-               \"members\": {
-                 \"type\":  \"array\",
-                 \"items\": {\"$ref\": \"#/definitions/Person\"},
-                 \"minItems\": 1
-               }
-             },
-             \"required\": [\"members\"]
-           }
-         ]
-       },
-       \"Person\": {
-         \"allOf\": [
-           {\"$ref\": \"#/definitions/Owner\"},
-           {
-             \"type\":       \"object\",
-             \"properties\": {
-               \"name\": {\"type\": \"string\"},
-               \"age\":  {
-                 \"type\":    \"integer\",
-                 \"minimum\": 0,
-                 \"maximum\": 150
-               },
-               \"sex\": {
-                 \"type\": \"string\",
-                 \"enum\": [\"male\", \"female\"]
-               },
-               \"legalStatus\": {\"$ref\": \"#/definitions/LegalStatus\"}
-             },
-             \"required\": [\"age\", \"sex\"]
-           }
-         ]
-       },
-       \"LegalStatus\": {
-         \"type\":          \"object\",
-         \"discriminator\": \"status\",
-         \"properties\": {
-            \"status\": {\"type\": \"string\"}
-         },
-         \"required\": [\"status\"]
-       },
-       \"Single\": {
-         \"allOf\": [
-           {\"$ref\": \"#/definitions/LegalStatus\"},
-           {
-             \"type\":       \"object\",
-             \"properties\": {
-               \"minor\": {\"type\": \"boolean\"}
-             },
-             \"required\": [\"minor\"]
-           }
-         ]
-       },
-       \"Married\": {
-         \"allOf\": [
-           {\"$ref\": \"#/definitions/LegalStatus\"},
-           {
-             \"type\":       \"object\",
-             \"properties\": {
-               \"partnerName\": {\"type\": \"string\"}
-             },
-             \"required\": [\"partnerName\"]
-           }
-         ]
        }
      }}">>).
 -define(PET, 'Pet').
@@ -372,100 +322,34 @@ test_validate(Value, DefName, BinSchema) ->
     end.
 
 expect(Error, Path) ->
-    map_error_reason({data_invalid, undefined, Error, undefined, Path}).
+    expect(Error, Path, undefined).
+
+expect(Error, Path, Data) ->
+    map_error_reason({data_invalid, undefined, Error, Data, Path}).
 
 %% Test cases
 -spec test() -> _.
 
--spec good_pet_test() -> _.
-good_pet_test() ->
+-spec ok_discr_simple_test() -> _.
+ok_discr_simple_test() ->
     Pet = <<"{
-        \"type\":         \"Cat\",
-        \"name\":         \"Flaffy\",
-        \"huntingSkill\": \"adventurous\",
-        \"owner\": {
-            \"type\":      \"Person\",
-            \"soleOwner\": true,
-            \"name\":      \"Robin\",
-            \"age\":       12,
-            \"sex\":       \"male\",
-            \"legalStatus\": {
-                \"status\": \"Single\",
-                \"minor\":  true
-            }
-        }
+        \"name\":         \"Fluffy\",
+        \"petType\":      \"Cat\",
+        \"huntingSkill\": \"adventurous\"
     }">>,
     ?assertEqual(ok, test_validate(Pet, ?PET, ?PET_SCHEMA)).
 
--spec wrong_cat_test() -> _.
-wrong_cat_test() ->
+-spec bad_1st_level_discr_simple_test() -> _.
+bad_1st_level_discr_simple_test() ->
     Pet = <<"{
-        \"name\": \"Fluffy\",
-        \"type\": \"Cat\",
+        \"name\":         \"Fluffy\",
+        \"petType\":      \"Cat\",
         \"huntingSkill\": \"wrong\"
     }">>,
-    ?assertEqual(expect(all_schemas_not_valid, []), test_validate(Pet, ?PET, ?PET_SCHEMA)).
+    ?assertEqual(expect(not_in_enum, [<<"huntingSkill">>]), test_validate(Pet, ?PET, ?PET_SCHEMA)).
 
--spec person_sex_missing_test() -> _.
-person_sex_missing_test() ->
-    Pet = <<"{
-        \"type\":         \"Cat\",
-        \"name\":         \"Fluffy\",
-        \"huntingSkill\": \"adventurous\",
-        \"owner\": {
-            \"type\":      \"Person\",
-            \"soleOwner\": true,
-            \"name\":      \"true\",
-            \"age\":       12,
-            \"legalStatus\": {
-                \"status\": \"Single\",
-                \"minor\":  true
-            }
-        }
-    }">>,
-    ?assertEqual(expect(all_schemas_not_valid, [<<"owner">>]), test_validate(Pet, ?PET, ?PET_SCHEMA)).
-
--spec legal_status_minor_flag_missing_test() -> _.
-legal_status_minor_flag_missing_test() ->
-    Pet = <<"{
-        \"type\":         \"Cat\",
-        \"name\":         \"Fluffy\",
-        \"huntingSkill\": \"adventurous\",
-        \"owner\": {
-            \"type\":      \"Person\",
-            \"soleOwner\": true,
-            \"name\":      \"true\",
-            \"age\":       12,
-            \"sex\":       \"male\",
-            \"legalStatus\": {
-                \"status\": \"Single\"
-            }
-        }
-    }">>,
-    ?assertEqual(expect(all_schemas_not_valid, [<<"owner">>]), test_validate(Pet, ?PET, ?PET_SCHEMA)).
-
--spec exceed_int32_swagger_format_test() -> _.
-exceed_int32_swagger_format_test() ->
-    Pet = <<"{
-        \"type\":     \"Dog\",
-        \"name\":     \"Rex\",
-        \"packSize\": 2147483650,
-        \"owner\": {
-            \"type\":      \"Person\",
-            \"soleOwner\": true,
-            \"name\":      \"Robin\",
-            \"age\":       12,
-            \"sex\":       \"male\",
-            \"legalStatus\": {
-                \"status\": \"Single\",
-                \"minor\":  true
-            }
-        }
-    }">>,
-    ?assertEqual(expect(all_schemas_not_valid, []), test_validate(Pet, ?PET, ?PET_SCHEMA)).
-
--spec good_predicate_test() -> _.
-good_predicate_test() ->
+-spec ok_discr_recursive_definition_test() -> _.
+ok_discr_recursive_definition_test() ->
     Predicate = <<"{
         \"type\": \"Conjunction\",
         \"operands\": [
@@ -481,8 +365,8 @@ good_predicate_test() ->
     }">>,
     ?assertEqual(ok, test_validate(Predicate, ?PRED, ?PRED_SCHEMA)).
 
--spec wrong_predicate_test() -> _.
-wrong_predicate_test() ->
+-spec bad_3d_level_discr_recursive_definition_test() -> _.
+bad_3d_level_discr_recursive_definition_test() ->
     Predicate = <<"{
         \"type\": \"Conjunction\",
         \"operands\": [
@@ -496,5 +380,17 @@ wrong_predicate_test() ->
           }
         ]
     }">>,
-    ?assertEqual(expect(all_schemas_not_valid, []), test_validate(Predicate, ?PRED, ?PRED_SCHEMA)).
+    ?assertEqual(
+        expect(wrong_type, [<<"operands">>, 1, <<"operands">>, 0, <<"value">>]),
+        test_validate(Predicate, ?PRED, ?PRED_SCHEMA)
+    ).
+
+-spec exceed_int32_swagger_format_test() -> _.
+exceed_int32_swagger_format_test() ->
+    Pet = <<"{
+        \"name\":     \"Rex\",
+        \"petType\":  \"Dog\",
+        \"packSize\": 2147483650
+    }">>,
+    ?assertEqual(expect(wrong_format, [<<"packSize">>]), test_validate(Pet, ?PET, ?PET_SCHEMA)).
 -endif.
