@@ -36,12 +36,6 @@ public class ErlangClientCodegen extends DefaultCodegen implements CodegenConfig
         // set the output folder here
         outputFolder = "generated-code/erlang-client";
 
-        if (additionalProperties.containsKey(CodegenConstants.PACKAGE_NAME)) {
-            setPackageName((String) additionalProperties.get(CodegenConstants.PACKAGE_NAME));
-        } else {
-            additionalProperties.put(CodegenConstants.PACKAGE_NAME, packageName);
-        };
-
         /**
          * Models.  You can write model files using the modelTemplateFiles map.
          * if you want to create one template for file, you can do so here.
@@ -56,7 +50,7 @@ public class ErlangClientCodegen extends DefaultCodegen implements CodegenConfig
          * class
          */
         apiTemplateFiles.put(
-            "client_api.mustache",   // the template to use
+            "api.mustache",   // the template to use
             ".erl");       // the extension for each file to write
 
         /**
@@ -109,14 +103,25 @@ public class ErlangClientCodegen extends DefaultCodegen implements CodegenConfig
          */
         additionalProperties.put("apiVersion", apiVersion);
         additionalProperties.put("apiPath", apiPath);
+    }
+
+    @Override
+    public void processOpts() {
+        super.processOpts();
+        if (additionalProperties.containsKey(CodegenConstants.PACKAGE_NAME)) {
+            setPackageName((String) additionalProperties.get(CodegenConstants.PACKAGE_NAME));
+        } else {
+            additionalProperties.put(CodegenConstants.PACKAGE_NAME, packageName);
+        }
+
         /**
          * Supporting Files.  You can write single files for the generator with the
          * entire object tree available.  If the input file has a suffix of `.mustache
          * it will be processed by the template engine.  Otherwise, it will be copied
          */
-        supportingFiles.add(new SupportingFile("client_api_params.mustache", "", toSourceFilePath("client_api_params", "erl")));
-        supportingFiles.add(new SupportingFile("client_api_procession.mustache", "", toSourceFilePath("client_api_procession", "erl")));
-        supportingFiles.add(new SupportingFile("client_api_utils.mustache", "", toSourceFilePath("client_api_utils", "erl")));
+        supportingFiles.add(new SupportingFile("params.mustache", "", toSourceFilePath("params", "erl")));
+        supportingFiles.add(new SupportingFile("procession.mustache", "", toSourceFilePath("procession", "erl")));
+        supportingFiles.add(new SupportingFile("utils.mustache", "", toSourceFilePath("utils", "erl")));
         supportingFiles.add(new SupportingFile("types.mustache", "", toPackageNameSrcFile("erl")));
         supportingFiles.add(new SupportingFile("validation.mustache", "", toSourceFilePath("validation", "erl")));
         supportingFiles.add(new SupportingFile("param_validator.mustache", "", toSourceFilePath("param_validator", "erl")));
