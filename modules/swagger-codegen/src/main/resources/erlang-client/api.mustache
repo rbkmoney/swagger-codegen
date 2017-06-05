@@ -2,16 +2,24 @@
 -module({{classname}}).
 
 %% generated methods
-{{#operations}}{{#operation}}-export([{{operationId}}/3]).
+{{#operations}}{{#operation}}
+-export([{{operationId}}/3]).
+-export([{{operationId}}/4]).
 {{/operation}}{{/operations}}
 {{#operations}}{{#operation}}
 -spec {{operationId}}(Host::string(), Port::integer(), Params::map()) ->
     {ok, Code::integer(), RespHeaders::list(), RespBody::{ok, binary()}}.
 {{operationId}}(Host, Port, Params) ->
+    {{operationId}}(Host, Port, Params, []).
+
+-spec {{operationId}}(Host::string(), Port::integer(), Params::map(), Opts::list()) ->
+    {ok, Code::integer(), RespHeaders::list(), RespBody::{ok, binary()}}.
+{{operationId}}(Host, Port, Params, Opts) ->
     {{packageName}}_procession:process_request(
         {{httpMethod}},
         {{operationId}},
         {{packageName}}_utils:get_url(Host, Port, "{{basePathWithoutHost}}{{path}}"),
-        Params
+        Params,
+        Opts
     ).
 {{/operation}}{{/operations}}
