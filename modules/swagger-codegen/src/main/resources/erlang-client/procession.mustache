@@ -11,15 +11,16 @@
     body        := any(),
     qs_val      := any()
 }.
+-type opts()   :: {{packageName}}:transport_opts().
 -type url()    :: string().
 -type method() :: atom().
 -type code()   :: pos_integer().
 
--export([process_request/4]).
+-export([process_request/5]).
 
--spec process_request(method(), operation_id(), url(), params()) ->
+-spec process_request(method(), operation_id(), url(), params(), opts()) ->
     {ok, code(), list(), {ok, binary()}} | {error, _Reason}.
-process_request(Method, OperationID, Url, Params) ->
+process_request(Method, OperationID, Url, Params, Opts) ->
     State = #{
         operation_id => OperationID
     },
@@ -29,7 +30,7 @@ process_request(Method, OperationID, Url, Params) ->
             PreparedUrl = prepare_url(Url, PreparedUrlParams, PreparedQueryParams),
             PreparedHeaders = maps:to_list(PreparedHeaderParams),
             PreparedBody = jsx:encode(PreparedBodyParams),
-            hackney:request(Method, PreparedUrl, PreparedHeaders, PreparedBody, [with_body]);
+            hackney:request(Method, PreparedUrl, PreparedHeaders, PreparedBody, [with_body] ++ Opts);
         {error, Reason} ->
             {error, Reason}
     end.
