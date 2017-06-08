@@ -12,7 +12,7 @@
 {{operationId}}(Endpoint, Params) ->
     {{operationId}}(Endpoint, Params, []).
 
--spec {{operationId}}(Endpoint::{{packageName}}:endpoint(), Params::map(), Opts::{{packageName}}:hackney_opts()) ->
+-spec {{operationId}}(Endpoint::{{packageName}}:endpoint(), Params::map(), Opts::{{packageName}}:transport_opts()) ->
     {ok, Code::integer(), RespHeaders::list(), RespBody::{ok, binary()}}.
 {{operationId}}(Endpoint, Params, Opts) ->
     {{packageName}}_procession:process_request(

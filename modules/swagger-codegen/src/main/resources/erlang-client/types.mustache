@@ -11,7 +11,7 @@
 -export_type([api_key/0]).
 -export_type([object/0]).
 -export_type([endpoint/0]).
--export_type([hackney_opts/0]).
+-export_type([transport_opts/0]).
 
 -type auth_context() :: any().
 -type operation_id() :: atom().
@@ -29,7 +29,7 @@
     peer         => client_peer()
 }.
 
--type hackney_opts() :: list(). % you can find it in hackney:request/5
+-type transport_opts() :: list(). % you can find it in hackney:request/5
 
 %% Internal
 
