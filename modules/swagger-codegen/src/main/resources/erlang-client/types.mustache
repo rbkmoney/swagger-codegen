@@ -10,11 +10,13 @@
 -export_type([operation_id/0]).
 -export_type([api_key/0]).
 -export_type([object/0]).
+-export_type([endpoint/0]).
 
 -type auth_context() :: any().
 -type operation_id() :: atom().
 -type api_key()      :: binary().
 -type object()       :: map().
+-type endpoint()     :: string() | {string(), pos_integer()}.
 
 -type client_peer() :: #{
     ip_address  => IP :: inet:ip_address(),
