@@ -16,11 +16,10 @@
 -define(REF,           <<"$ref">>).
 -define(DEFINITIONS,   "definitions").
 -define(NOT_FOUND,     not_found).
--define(REQUIRED,      <<"required">>).
--define(PROPERTIES,    <<"properties">>).
 -define(READ_ONLY,     <<"readOnly">>).
 
 -define(DISCR_ERROR(Error), {discriminator_not_valid, Error}).
+-define(READ_ONLY_ERROR, read_only_property_in_request).
 
 -type msg_type() :: request | response.
 
@@ -74,8 +73,8 @@ check_value(Value, Attr = {?REF, Ref}, State) ->
     end;
 check_value(Value, Format = {?FORMAT, _}, State) ->
     validate_format(Value, Format, State);
-check_value(Value, {?REQUIRED, Required}, State) ->
-    validate_required(Value, Required, State);
+check_value(Value, {?READ_ONLY, ReadOnly}, State) ->
+    validate_read_only(Value, ReadOnly, State);
 check_value(Value, Attr, State) ->
     jesse_validator_draft4:check_value(Value, Attr, State).
 
@@ -164,29 +163,13 @@ make_ref_schema(Ref) ->
 ref_tag(Ref, Path) ->
     {Ref, Path}.
 
-validate_required(Value, Required, State) ->
+validate_read_only(Value, true, State) ->
     ValidatorState = jesse_state:get_validator_state(State),
-    NewRequired = case maps:get(msg_type, ValidatorState) of
+    case maps:get(msg_type, ValidatorState) of
         request ->
-            Schema = jesse_state:get_current_schema(State),
-            Properties = maps:get(?PROPERTIES, Schema, #{}),
-            lists:filter(fun(Field) -> not is_read_only(Field, Properties) end, Required);
+            jesse_error:handle_data_invalid(?READ_ONLY_ERROR, Value, State);
         response ->
-            Required
-    end,
-    case NewRequired of
-        [] ->
-            State;
-        _ ->
-            jesse_validator_draft4:check_value(Value, {?REQUIRED, NewRequired}, State)
-    end.
-
-is_read_only(Field, Properties) ->
-    case maps:get(Field, Properties, undefined) of
-        undefined ->
-            false;
-        Def ->
-            maps:get(?READ_ONLY, Def, false)
+            State
     end.
 
 options() ->
@@ -252,7 +235,9 @@ get_error_description(wrong_type, _Value) ->
 get_error_description(wrong_format, _Value) ->
     <<"Wrong format">>;
 get_error_description(?DISCR_ERROR(SchemaName), _Value) ->
-    <<"Discriminator child schema ", SchemaName/binary, " doesn't exist">>.
+    <<"Discriminator child schema ", SchemaName/binary, " doesn't exist">>;
+get_error_description(?READ_ONLY_ERROR, _Value) ->
+    <<"Property that marked as \"readOnly\" must not be sent as part of the request">>.
 
 
 -ifdef(TEST).
@@ -320,8 +305,7 @@ get_error_description(?DISCR_ERROR(SchemaName), _Value) ->
                }
              }
            }
-         ],
-         \"required\": [\"weight\"]
+         ]
        }
      }}">>).
 -define(PET, 'Pet').
@@ -459,9 +443,19 @@ exceed_int32_swagger_format_test() ->
 ok_read_only_request_test() ->
     Pet = <<"{
         \"name\":     \"Babe\",
-        \"petType\":  \"Pig\",
+        \"petType\":  \"Pig\"
     }">>,
     ?assertEqual(ok, test_validate(Pet, ?PET, ?PET_SCHEMA, request)).
+
+-spec error_read_only_request_test() -> _.
+error_read_only_request_test() ->
+    Pet = <<"{
+        \"name\":     \"Babe\",
+        \"petType\":  \"Pig\",
+        \"weight\": 0
+    }">>,
+    ?assertEqual(expect(?READ_ONLY_ERROR, [<<"weight">>]), test_validate(Pet, ?PET, ?PET_SCHEMA, request)).
+
 
 -spec ok_read_only_response_test() -> _.
 ok_read_only_response_test() ->
