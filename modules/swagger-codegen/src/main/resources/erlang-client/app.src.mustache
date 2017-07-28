@@ -1,17 +1,19 @@
-{application, {{packageName}},
- [{description, {{#appDescription}}"{{appDescription}}"{{/appDescription}}{{^appDescription}}"Swagger client library"{{/appDescription}}},
-  {vsn, "{{apiVersion}}"},
-  {registered, []},
-  {applications,
-    [kernel,
-     stdlib,
-     ssl,
-     hackney
+{application, {{packageName}}, [
+    {description, {{#appDescription}}"{{appDescription}}"{{/appDescription}}{{^appDescription}}"Swagger rest client library"{{/appDescription}}},
+    {vsn, "{{apiVersion}}"},
+    {registered, []},
+    {applications, [
+        kernel,
+        stdlib,
+        hackney,
+        jsx,
+        rfc3339,
+        jesse
     ]},
-  {env, []},
-  {modules, []},
-
-  {maintainers, []},
-  {licenses, [{{#licenseInfo}}"{{licenseInfo}}"{{/licenseInfo}}]},
-  {links, [{{#infoUrl}}"{{infoUrl}}"{{/infoUrl}}]}
+    {env, [
+    ]},
+    {modules, []},
+    {licenses, [{{#licenseInfo}}"{{licenseInfo}}"{{/licenseInfo}}]},
+    {links, [{{#infoUrl}}"{{infoUrl}}"{{/infoUrl}}]}
 ]}.
+

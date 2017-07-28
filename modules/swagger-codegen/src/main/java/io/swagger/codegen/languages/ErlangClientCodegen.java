@@ -119,6 +119,8 @@ public class ErlangClientCodegen extends DefaultCodegen implements CodegenConfig
          * entire object tree available.  If the input file has a suffix of `.mustache
          * it will be processed by the template engine.  Otherwise, it will be copied
          */
+        supportingFiles.add(new SupportingFile("rebar.config.mustache", "", "rebar.config"));
+        supportingFiles.add(new SupportingFile("app.src.mustache", "", "src" + File.separator + this.packageName + ".app.src"));
         supportingFiles.add(new SupportingFile("params.mustache", "", toSourceFilePath("params", "erl")));
         supportingFiles.add(new SupportingFile("procession.mustache", "", toSourceFilePath("procession", "erl")));
         supportingFiles.add(new SupportingFile("utils.mustache", "", toSourceFilePath("utils", "erl")));
@@ -127,6 +129,7 @@ public class ErlangClientCodegen extends DefaultCodegen implements CodegenConfig
         supportingFiles.add(new SupportingFile("param_validator.mustache", "", toSourceFilePath("param_validator", "erl")));
         supportingFiles.add(new SupportingFile("schema_validator.mustache", "", toSourceFilePath("schema_validator", "erl")));
         supportingFiles.add(new SupportingFile("schema.mustache", "", toSourceFilePath("schema", "erl")));
+        writeOptional(outputFolder, new SupportingFile("README.mustache", "", "README.md"));
     }
 
     @Override
