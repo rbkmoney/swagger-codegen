@@ -1,0 +1,11 @@
+{erl_opts, [
+    {parse_transform, ct_expand}
+]}.
+
+{deps, [
+    {hackney,     "1.5.7"},
+    {jsx,         "2.8.2"},
+    {rfc3339,     "0.2.2"},
+    {jesse,       {git, "https://github.com/rbkmoney/jesse.git", {branch, "master"}}},
+    {parse_trans, {git, "git@github.com:rbkmoney/parse_trans.git", {branch, "master"}}}
+]}.
