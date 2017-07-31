@@ -4,10 +4,10 @@
 -behaviour(jesse_schema_validator).
 
 %% API
--export([validate/2]).
+-export([validate/3]).
 
 %% Behaviour callbacks
--export([init_state/0]).
+-export([init_state/1]).
 -export([check_value/3]).
 
 -define(DISCRIMINATOR, <<"discriminator">>).
@@ -16,25 +16,36 @@
 -define(REF,           <<"$ref">>).
 -define(DEFINITIONS,   "definitions").
 -define(NOT_FOUND,     not_found).
+-define(READ_ONLY,     <<"readOnly">>).
 
 -define(DISCR_ERROR(Error), {discriminator_not_valid, Error}).
+-define(READ_ONLY_ERROR, read_only_property_in_request).
+
+-type msg_type() :: request | response.
+-type state() ::
+    #{
+        refs => [],
+        msg_type => msg_type()
+    }.
 
 %%
--spec init_state() ->
-    [].
-init_state() ->
-    [].
+-spec init_state(Opts :: jesse_state:validator_opts()) -> state().
+
+init_state(Opts) ->
+    Opts#{refs => []}.
 
 -spec validate(
     Value   :: {{packageName}}:value(),
-    DefName :: {{packageName}}:param_name()
+    DefName :: {{packageName}}:param_name(),
+    MsgType :: msg_type()
 ) ->
     ok | {error, Error :: {{packageName}}:error_reason()}.
-validate(Value, DefName) ->
-    validate(Value, DefName, {{packageName}}_schema:get()).
+validate(Value, DefName, MsgType) ->
+    validate(Value, DefName, MsgType, {{packageName}}_schema:get()).
 
-validate(Value, DefName, Schema) ->
-    case jesse:validate_definition({{packageName}}_utils:to_list(DefName), Schema, Value, options()) of
+validate(Value, DefName, MsgType, Schema) ->
+    Options = [{validator_opts, #{msg_type => MsgType}} | options()],
+    case jesse:validate_definition({{packageName}}_utils:to_list(DefName), Schema, Value, Options) of
         {ok, _} ->
             ok;
         {error, [Error]} ->
@@ -55,14 +66,16 @@ check_value(Value, {?DISCRIMINATOR, DiscrField}, State) ->
         false -> State
     end;
 check_value(Value, {?ALLOF, Schemas}, State) ->
-  check_all_of(Value, Schemas, State);
+    check_all_of(Value, Schemas, State);
 check_value(Value, Attr = {?REF, Ref}, State) ->
     case is_recursive_ref(Ref, State) of
         true -> State;
         false -> validate_ref(Value, Attr, State)
     end;
 check_value(Value, Format = {?FORMAT, _}, State) ->
-  validate_format(Value, Format, State);
+    validate_format(Value, Format, State);
+check_value(Value, {?READ_ONLY, ReadOnly}, State) ->
+    validate_read_only(Value, ReadOnly, State);
 check_value(Value, Attr, State) ->
     jesse_validator_draft4:check_value(Value, Attr, State).
 
@@ -127,26 +140,39 @@ validate_ref(Value, Attr = {?REF, Ref} , State) ->
     remove_last_ref_from_state(State2).
 
 add_ref_to_state(State, Ref) ->
-    ValState = jesse_state:get_validator_state(State),
-    jesse_state:set_validator_state(State, [Ref | ValState]).
+    ValidatorState = jesse_state:get_validator_state(State),
+    #{refs := Refs} = ValidatorState,
+    jesse_state:set_validator_state(State, ValidatorState#{refs => [Ref | Refs]}).
 
 remove_last_ref_from_state(State) ->
-    case jesse_state:get_validator_state(State) of
+    ValidatorState = jesse_state:get_validator_state(State),
+    #{refs := Refs} = ValidatorState,
+    case Refs of
         [_ | Rest] ->
-            jesse_state:set_validator_state(State, Rest);
+            jesse_state:set_validator_state(State, ValidatorState#{refs => Rest});
         [] ->
             State
     end.
 
 is_recursive_ref(Ref, State) ->
     RefTag = ref_tag(Ref, jesse_state:get_current_path(State)),
-    lists:member(RefTag, jesse_state:get_validator_state(State)).
+    #{refs := Refs} = jesse_state:get_validator_state(State),
+    lists:member(RefTag, Refs).
 
 make_ref_schema(Ref) ->
     [{?REF, Ref}].
 
 ref_tag(Ref, Path) ->
     {Ref, Path}.
+
+validate_read_only(Value, true, State) ->
+    #{msg_type := MsgType} = jesse_state:get_validator_state(State),
+    case MsgType of
+        request ->
+            jesse_error:handle_data_invalid(?READ_ONLY_ERROR, Value, State);
+        response ->
+            State
+    end.
 
 options() ->
     [{validator, ?MODULE}, {allowed_errors, 0}].
@@ -211,7 +237,9 @@ get_error_description(wrong_type, _Value) ->
 get_error_description(wrong_format, _Value) ->
     <<"Wrong format">>;
 get_error_description(?DISCR_ERROR(SchemaName), _Value) ->
-    <<"Discriminator child schema ", SchemaName/binary, " doesn't exist">>.
+    <<"Discriminator child schema ", SchemaName/binary, " doesn't exist">>;
+get_error_description(?READ_ONLY_ERROR, _Value) ->
+    <<"Property that marked as \"readOnly\" must not be sent as part of the request">>.
 
 
 -ifdef(TEST).
@@ -264,6 +292,22 @@ get_error_description(?DISCR_ERROR(SchemaName), _Value) ->
            }
          ],
          \"required\": [\"packSize\"]
+       },
+       \"Pig\": {
+         \"description\": \"A representation of a pig\",
+         \"allOf\": [
+           {\"$ref\": \"#/definitions/Pet\"},
+           {
+             \"type\":       \"object\",
+             \"properties\": {
+               \"weight\": {
+                 \"type\":        \"integer\",
+                 \"description\": \"the weight of the pig\",
+                 \"readOnly\":     true
+               }
+             }
+           }
+         ]
        }
      }}">>).
 -define(PET, 'Pet').
@@ -314,9 +358,12 @@ get_error_description(?DISCR_ERROR(SchemaName), _Value) ->
 -define(PRED, 'Predicate').
 
 test_validate(Value, DefName, BinSchema) ->
+    test_validate(Value, DefName, BinSchema, response).
+
+test_validate(Value, DefName, BinSchema, MsgType) ->
     Schema    = jsx:decode(BinSchema, [return_maps]),
     JsonValue = jsx:decode(Value, [return_maps]),
-    case validate(JsonValue, DefName, Schema) of
+    case validate(JsonValue, DefName, MsgType, Schema) of
         ok             -> ok;
         {error, Error} -> Error
     end.
@@ -393,4 +440,31 @@ exceed_int32_swagger_format_test() ->
         \"packSize\": 2147483650
     }">>,
     ?assertEqual(expect(wrong_format, [<<"packSize">>]), test_validate(Pet, ?PET, ?PET_SCHEMA)).
+
+-spec ok_read_only_request_test() -> _.
+ok_read_only_request_test() ->
+    Pet = <<"{
+        \"name\":     \"Babe\",
+        \"petType\":  \"Pig\"
+    }">>,
+    ?assertEqual(ok, test_validate(Pet, ?PET, ?PET_SCHEMA, request)).
+
+-spec error_read_only_request_test() -> _.
+error_read_only_request_test() ->
+    Pet = <<"{
+        \"name\":     \"Babe\",
+        \"petType\":  \"Pig\",
+        \"weight\": 0
+    }">>,
+    ?assertEqual(expect(?READ_ONLY_ERROR, [<<"weight">>]), test_validate(Pet, ?PET, ?PET_SCHEMA, request)).
+
+
+-spec ok_read_only_response_test() -> _.
+ok_read_only_response_test() ->
+    Pet = <<"{
+        \"name\":     \"Babe\",
+        \"petType\":  \"Pig\",
+        \"weight\": 0
+    }">>,
+    ?assertEqual(ok, test_validate(Pet, ?PET, ?PET_SCHEMA)).
 -endif.

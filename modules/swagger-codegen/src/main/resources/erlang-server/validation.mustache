@@ -60,9 +60,9 @@ prepare_request_param(Rules, Name, Value) ->
 validate_response({DataType, SchemaName}, Body) ->
     Result = case DataType of
         'list' ->
-            ?catch_error([validate(schema, SchemaName, Item) || Item <- Body]);
+            ?catch_error([validate(schema, SchemaName, Item, response) || Item <- Body]);
         _ ->
-            ?catch_error(validate(schema, SchemaName, Body))
+            ?catch_error(validate(schema, SchemaName, Body, response))
     end,
     case Result of
         E = {error, _} -> E;
@@ -86,7 +86,7 @@ validate_response(undefined, _) ->
 validate_param(Rules, Name, Value) ->
     lists:foldl(
         fun(Rule, Acc) ->
-            case validate(Rule, Name, Acc) of
+            case validate(Rule, Name, Acc, request) of
                 ok             -> Acc;
                 {ok, Prepared} -> Prepared
             end
@@ -95,14 +95,14 @@ validate_param(Rules, Name, Value) ->
         Rules
     ).
 
-validate(Rule = schema, Name, Value) ->
-    case {{packageName}}_schema_validator:validate(Value, Name) of
+validate(Rule = schema, Name, Value, MsgType) ->
+    case {{packageName}}_schema_validator:validate(Value, Name, MsgType) of
         ok ->
             ok;
         {error, Reason} ->
             report_validation_error(Rule, Name, Reason)
     end;
-validate(Rule, Name, Value) ->
+validate(Rule, Name, Value, _MsgType) ->
     case {{packageName}}_param_validator:validate(Rule, Value) of
         ok ->
             ok;
