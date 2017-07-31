@@ -22,13 +22,14 @@
 -define(READ_ONLY_ERROR, read_only_property_in_request).
 
 -type msg_type() :: request | response.
-
-%%
--spec init_state(Opts :: jesse_state:validator_opts()) ->
+-type state() ::
     #{
         refs => [],
         msg_type => msg_type()
     }.
+
+%%
+-spec init_state(Opts :: jesse_state:validator_opts()) -> state().
 
 init_state(Opts) ->
     Opts#{refs => []}.
@@ -140,22 +141,23 @@ validate_ref(Value, Attr = {?REF, Ref} , State) ->
 
 add_ref_to_state(State, Ref) ->
     ValidatorState = jesse_state:get_validator_state(State),
-    Refs = maps:get(refs, ValidatorState),
-    jesse_state:set_validator_state(State, maps:update(refs, [Ref | Refs], ValidatorState)).
+    #{refs := Refs} = ValidatorState,
+    jesse_state:set_validator_state(State, ValidatorState#{refs => [Ref | Refs]}).
 
 remove_last_ref_from_state(State) ->
     ValidatorState = jesse_state:get_validator_state(State),
-    case maps:get(refs, ValidatorState) of
+    #{refs := Refs} = ValidatorState,
+    case Refs of
         [_ | Rest] ->
-            jesse_state:set_validator_state(State, maps:update(refs, Rest, ValidatorState));
+            jesse_state:set_validator_state(State, ValidatorState#{refs => Rest});
         [] ->
             State
     end.
 
 is_recursive_ref(Ref, State) ->
     RefTag = ref_tag(Ref, jesse_state:get_current_path(State)),
-    ValidatorState = jesse_state:get_validator_state(State),
-    lists:member(RefTag, maps:get(refs, ValidatorState)).
+    #{refs := Refs} = jesse_state:get_validator_state(State),
+    lists:member(RefTag, Refs).
 
 make_ref_schema(Ref) ->
     [{?REF, Ref}].
@@ -164,8 +166,8 @@ ref_tag(Ref, Path) ->
     {Ref, Path}.
 
 validate_read_only(Value, true, State) ->
-    ValidatorState = jesse_state:get_validator_state(State),
-    case maps:get(msg_type, ValidatorState) of
+    #{msg_type := MsgType} = jesse_state:get_validator_state(State),
+    case MsgType of
         request ->
             jesse_error:handle_data_invalid(?READ_ONLY_ERROR, Value, State);
         response ->
