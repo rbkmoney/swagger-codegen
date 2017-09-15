@@ -16,8 +16,7 @@
     {min, Min :: number(), Type :: exclusive | inclusive} |
     {max_length, MaxLength :: integer()} |
     {min_length, MaxLength :: integer()} |
-    {pattern, Pattern :: string()} |
-    {required, boolean()}.
+    {pattern, Pattern :: string()}.
 -type collection_format() ::
     'csv' |
     'ssv' |
@@ -33,16 +32,7 @@
 %% API
 
 -spec validate(Rule :: param_rule(), Param :: {{packageName}}:value()) ->
-	ok | {ok, Prepared :: {{packageName}}:value()} | error.
-
-validate({required, Req}, Value) ->
-    case Value of
-        undefined when Req -> error;
-        _ -> ok
-    end;
-
-validate(_,  undefined) ->
-    ok;
+    ok | {ok, Prepared :: {{packageName}}:value()} | error.
 
 validate({'list', Format, Ruleset}, Value) ->
     try
@@ -272,7 +262,6 @@ get_split_pattern('pipes') ->
 -include_lib("eunit/include/eunit.hrl").
 
 -spec test() -> _.
--spec validate_required_test() -> _.
 -spec validate_int64_test() -> _.
 -spec validate_int32_test() -> _.
 -spec validate_float_test() -> _.
@@ -288,11 +277,6 @@ get_split_pattern('pipes') ->
 -spec validate_min_length_test() -> _.
 -spec validate_pattern_test() -> _.
 -spec validate_array_test() -> _.
-
-validate_required_test() ->
-    ?assertEqual(ok, validate({required, true}, <<"test">>)),
-    ?assertEqual(ok, validate({required, false}, <<"test">>)),
-    ?assertEqual(error, validate({required, true}, undefined)).
 
 validate_int64_test() ->
     ?assertEqual({ok, 2}, validate({type, 'int64'},2)),

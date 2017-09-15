@@ -3,7 +3,7 @@
 -export([prepare_request_param/3]).
 -export([validate_response/2]).
 
--type rule()          :: schema | {{packageName}}_param_validator:param_rule().
+-type rule()          :: schema | {required, boolean()} | {{packageName}}_param_validator:param_rule().
 -type data_type()     :: 'list' | atom().
 -type response_spec() :: {data_type(), {{packageName}}:param_name()} | undefined.
 
@@ -95,6 +95,12 @@ validate_param(Rules, Name, Value) ->
         Rules
     ).
 
+validate(Rule = {required, true}, Name, undefined, _MsgType) ->
+    report_validation_error(Rule, Name);
+validate({required, _}, _Name, _, _MsgType) ->
+    ok;
+validate(_, _Name, undefined, _MsgType) ->
+    ok;
 validate(Rule = schema, Name, Value, MsgType) ->
     case {{packageName}}_schema_validator:validate(Value, Name, MsgType) of
         ok ->
@@ -150,3 +156,17 @@ map_violated_rule({pattern, _}) ->  no_match;
 map_violated_rule(schema) ->  schema_violated;
 map_violated_rule({required, _}) ->  not_found;
 map_violated_rule({list, _, _}) ->  wrong_array.
+
+-ifdef(TEST).
+
+-include_lib("eunit/include/eunit.hrl").
+
+-spec test() -> _.
+-spec validate_required_test() -> _.
+
+validate_required_test() ->
+    ?assertEqual(ok, validate({required, true}, 'Name', <<"test">>, request)),
+    ?assertEqual(ok, validate({required, false}, 'Name', <<"test">>, request)),
+    ?assertThrow({wrong_param, _, _}, validate({required, true}, 'Name', undefined, request)).
+
+-endif.
