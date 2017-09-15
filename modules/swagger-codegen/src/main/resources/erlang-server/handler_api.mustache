@@ -217,8 +217,8 @@ get_value(binding, Name, Req0) ->
     {ok, Value, Req}.
 
 -spec decode_body(Body :: binary()) ->
-    {ok,    Decoded :: swag_server:object() | undefined} |
-    {error, Message :: swag_server:error_reason()}.
+    {ok,    Decoded :: {{packageName}}:object() | undefined} |
+    {error, Message :: {{packageName}}:error_reason()}.
 decode_body(<<>>) ->
     {ok, undefined};
 decode_body(Body) ->
