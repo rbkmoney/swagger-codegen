@@ -51,9 +51,6 @@ validate({'list', Format, Ruleset}, Value) ->
             error
     end;
 
-validate('list_end', _Value) ->
-    ok;
-
 validate({type, 'int64'}, Value0) ->
     try
         Value = {{packageName}}_utils:to_int(Value0),
