@@ -28,7 +28,7 @@ request_params(OperationID) ->
 request_param_info('{{operationId}}', {{^isBodyParam}}'{{baseName}}'{{/isBodyParam}}{{#isBodyParam}}'{{dataType}}'{{/isBodyParam}}) ->
     #{
         source => {{#isQueryParam}}qs_val{{/isQueryParam}} {{#isPathParam}}binding{{/isPathParam}} {{#isHeaderParam}}header{{/isHeaderParam}}{{#isBodyParam}}body{{/isBodyParam}},
-        rules => {{#isListContainer}}[{list, '{{collectionFormat}}', {{#items}}[{{>api.param_info}}]{{/items}}}, {{>api.param_info}}]{{/isListContainer}}{{^isListContainer}}[{{>api.param_info}}]{{/isListContainer}}
+        rules  => [{{^isBodyParam}}{{#isListContainer}}{list, '{{collectionFormat}}', {{#items}}[{{>api.param_info}}]{{/items}}}, {{/isListContainer}}{{>api.param_info}}, {{/isBodyParam}}{{#isBodyParam}}schema, {{/isBodyParam}}{required, {{#required}}true{{/required}}{{^required}}false{{/required}}}]
     };
 {{/allParams}}{{/operation}}{{/operations}}{{/apis}}{{/apiInfo}}
 

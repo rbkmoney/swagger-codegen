@@ -1,3 +1,4 @@
+%% -*- mode: erlang -*-
 -module({{packageName}}_param_validator).
 
 -export([validate/2]).
@@ -16,7 +17,8 @@
     {min, Min :: number(), Type :: exclusive | inclusive} |
     {max_length, MaxLength :: integer()} |
     {min_length, MaxLength :: integer()} |
-    {pattern, Pattern :: string()}.
+    {pattern, Pattern :: string()} |
+    boolean().
 -type collection_format() ::
     'csv' |
     'ssv' |
@@ -33,6 +35,12 @@
 
 -spec validate(Rule :: param_rule(), Param :: {{packageName}}:value()) ->
     ok | {ok, Prepared :: {{packageName}}:value()} | error.
+
+validate(true, _Value) ->
+    ok;
+
+validate(false, _Value) ->
+    error;
 
 validate({'list', Format, Ruleset}, Value) ->
     try
@@ -356,9 +364,7 @@ validate_pattern_test() ->
     ?assertEqual(error, validate({pattern, <<"^[0-9]{2}\/[0-9]{2}$">>}, <<"22/225">>)).
 
 validate_array_test() ->
-    ?assertEqual({ok, [10,11,12]}, validate({list, 'csv', [{type, 'int32'}, {required, false}]}, <<"10,11,12">>)),
-    ?assertEqual(ok, validate({list, 'csv', [{type, 'int32'}, {required, false}]}, undefined)),
-    ?assertEqual(ok, validate({list, 'csv', [{type, 'int32'}, {required, true}]}, undefined)),
-    ?assertEqual(error, validate({list, 'csv', [{type, 'int32'}, {required, false}]}, <<"10,xyi,12">>)).
+    ?assertEqual({ok, [10,11,12]}, validate({list, 'csv', [{type, 'int32'}]}, <<"10,11,12">>)),
+    ?assertEqual(error, validate({list, 'csv', [{type, 'int32'}]}, <<"10,xyi,12">>)).
 
 -endif.
