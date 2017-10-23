@@ -17,7 +17,8 @@
     {min, Min :: number(), Type :: exclusive | inclusive} |
     {max_length, MaxLength :: integer()} |
     {min_length, MaxLength :: integer()} |
-    {pattern, Pattern :: string()}.
+    {pattern, Pattern :: string()} |
+    boolean().
 -type collection_format() ::
     'csv' |
     'ssv' |
@@ -25,7 +26,7 @@
     'pipes'.
 -type param_rule() ::
     param_base_rule() |
-    {'list', collection_format(), [param_base_rule() | 'list_end']}.
+    {'list', collection_format(), [param_base_rule()]}.
 
 -export_type([param_rule/0]).
 
@@ -34,6 +35,12 @@
 
 -spec validate(Rule :: param_rule(), Param :: {{packageName}}:value()) ->
     ok | {ok, Prepared :: {{packageName}}:value()} | error.
+
+validate(true, _Value) ->
+    ok;
+
+validate(false, _Value) ->
+    error;
 
 validate({'list', Format, Ruleset}, Value) ->
     try
