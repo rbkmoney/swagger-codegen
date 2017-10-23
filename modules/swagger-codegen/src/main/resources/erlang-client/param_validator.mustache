@@ -25,7 +25,7 @@
     'pipes'.
 -type param_rule() ::
     param_base_rule() |
-    {'list', collection_format(), [param_base_rule()]}.
+    {'list', collection_format(), [param_base_rule() | 'list_end']}.
 
 -export_type([param_rule/0]).
 
@@ -43,6 +43,9 @@ validate({'list', Format, Ruleset}, Value) ->
         _:_ ->
             error
     end;
+
+validate('list_end', _Value) ->
+    ok;
 
 validate({type, 'int64'}, Value0) ->
     try
@@ -357,9 +360,7 @@ validate_pattern_test() ->
     ?assertEqual(error, validate({pattern, <<"^[0-9]{2}\/[0-9]{2}$">>}, <<"22/225">>)).
 
 validate_array_test() ->
-    ?assertEqual({ok, [10,11,12]}, validate({list, 'csv', [{type, 'int32'}, {required, false}]}, <<"10,11,12">>)),
-    ?assertEqual(ok, validate({list, 'csv', [{type, 'int32'}, {required, false}]}, undefined)),
-    ?assertEqual(ok, validate({list, 'csv', [{type, 'int32'}, {required, true}]}, undefined)),
-    ?assertEqual(error, validate({list, 'csv', [{type, 'int32'}, {required, false}]}, <<"10,xyi,12">>)).
+    ?assertEqual({ok, [10,11,12]}, validate({list, 'csv', [{type, 'int32'}]}, <<"10,11,12">>)),
+    ?assertEqual(error, validate({list, 'csv', [{type, 'int32'}]}, <<"10,xyi,12">>)).
 
 -endif.
