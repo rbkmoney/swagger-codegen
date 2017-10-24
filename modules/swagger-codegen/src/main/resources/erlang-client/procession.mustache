@@ -25,11 +25,10 @@
     header  |
     body.
 
--type request_spec() :: [
-    {
-        {{packageName}}:param_name(),
-        #{source := param_source(), rules := [{{packageName}}_validation:rule()]}
-    }].
+-type request_spec() :: [{
+    {{packageName}}:param_name(),
+    #{source := param_source(), rules := [{{packageName}}_validation:rule()]}
+}].
 
 -type response_spec() :: {{packageName}}_validation:response_spec().
 

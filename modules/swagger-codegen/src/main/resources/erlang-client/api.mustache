@@ -7,14 +7,14 @@
 -export([{{operationId}}/3]).
 {{/operation}}{{/operations}}
 {{#operations}}{{#operation}}
--spec {{operationId}}(Endpoint::{{packageName}}:endpoint(), Params::map()) ->
-    {ok, Code::integer(), RespHeaders::list(), Response :: map()} |
+-spec {{operationId}}(Endpoint :: {{packageName}}:endpoint(), Params :: map()) ->
+    {ok, Code :: integer(), RespHeaders :: list(), Response :: map()} |
     {error, _Reason}.
 {{operationId}}(Endpoint, Params) ->
     {{operationId}}(Endpoint, Params, []).
 
--spec {{operationId}}(Endpoint::{{packageName}}:endpoint(), Params::map(), Opts::{{packageName}}:transport_opts()) ->
-    {ok, Code::integer(), RespHeaders::list(), Response :: map()} |
+-spec {{operationId}}(Endpoint :: {{packageName}}:endpoint(), Params :: map(), Opts :: {{packageName}}:transport_opts()) ->
+    {ok, Code :: integer(), RespHeaders :: list(), Response :: map()} |
     {error, _Reason}.
 {{operationId}}(Endpoint, Params, Opts) ->
     process_response({{packageName}}_procession:process_request(
