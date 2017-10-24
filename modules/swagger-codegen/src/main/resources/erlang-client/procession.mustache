@@ -1,10 +1,11 @@
 %% -*- mode: erlang -*-
 -module({{packageName}}_procession).
 
--type state() :: #{
-    operation_id := operation_id()
-}.
--type operation_id() :: {{packageName}}:operation_id().
+-export([process_request/5]).
+-export([process_response/2]).
+
+%%
+
 -type params() :: #{
     header      := any(),
     binding     := any(),
@@ -12,82 +13,114 @@
     qs_val      := any()
 }.
 -type opts()   :: {{packageName}}:transport_opts().
+-type object() :: {{packageName}}:object().
 -type url()    :: string().
 -type method() :: atom().
 -type code()   :: pos_integer().
+-type body()   :: binary().
 
--export([process_request/5]).
+-type param_source() ::
+    qs_val  |
+    binding |
+    header  |
+    body.
 
--spec process_request(method(), operation_id(), url(), params(), opts()) ->
-    {ok, code(), list(), {ok, binary()}} | {error, _Reason}.
-process_request(Method, OperationID, Url, Params, Opts) ->
-    State = #{
-        operation_id => OperationID
-    },
+-type request_spec() :: [{
+    {{packageName}}:param_name(),
+    #{source := param_source(), rules := [{{packageName}}_validation:rule()]}
+}].
 
-    case handle_request_json(Params, State) of
-        {ok, PreparedUrlParams, PreparedHeaderParams, PreparedBodyParams, PreparedQueryParams} ->
-            PreparedUrl = prepare_url(Url, PreparedUrlParams, PreparedQueryParams),
-            PreparedHeaders = maps:to_list(PreparedHeaderParams),
-            PreparedBody = jsx:encode(PreparedBodyParams),
-            hackney:request(Method, PreparedUrl, PreparedHeaders, PreparedBody, [with_body] ++ Opts);
-        {error, Reason} ->
-            {error, Reason}
-    end.
+-type response_spec() :: {{packageName}}_validation:response_spec().
 
--spec handle_request_json(params(), state()) ->
-    {ok, UrlParams::map(), HeaderParams::map(), BodyParams::map(), QueryParams::map()} | {error, term()}.
-handle_request_json(RequestParams, #{operation_id := OperationID}) ->
-    case populate_request(OperationID, RequestParams) of
-        {ok, Params} ->
-            {ok, maps:get(binding, Params), maps:get(header, Params), maps:get(body, Params), maps:get(qs_val, Params)};
-        {error, Reason, _} ->
-            {error, Reason}
-    end.
+-export_type([code/0]).
+-export_type([body/0]).
+-export_type([request_spec/0]).
+-export_type([response_spec/0]).
 
--spec populate_request(operation_id(), params()) ->
-    {ok, Params :: map()} | {error, Reason :: any(), Req :: term()}.
-populate_request(OperationID, RequestParams) ->
-    Params = {{packageName}}_params:request_params(OperationID),
-    populate_request_params(OperationID, Params, RequestParams).
+%% API
 
-populate_request_params(_, [], RequestParams) ->
-    {ok, RequestParams};
-populate_request_params(OperationID, [FieldParams | T], RequestParams) ->
-    case populate_request_param(OperationID, FieldParams, RequestParams) of
-        {ok, _K, _V, RequestParams} ->
-            populate_request_params(OperationID, T, RequestParams);
+-spec process_request(method(), url(), params(), request_spec(), opts()) ->
+    {ok, code(), list(), body()} |
+    {error, {request_validation_failed,  { {{packageName}}_validation:error(), BadParam :: atom()}}} |
+    {error, _Reason}.
+process_request(Method, BaseUrl, Params, Spec, Opts) ->
+    case prepare_request(Spec, BaseUrl, Params) of
+        {ok, #{
+            url     := Url,
+            headers := Headers,
+            body    := Body
+        }} ->
+            hackney:request(Method, Url, Headers, Body, [with_body] ++ Opts);
         Error ->
             Error
     end.
 
-populate_request_param(OperationID, Name, RequestParams0) ->
-    #{rules := Rules, source := Source} = {{packageName}}_params:request_param_info(OperationID, Name),
-    {Value, RequestParams} = get_value(Source, Name, RequestParams0),
+-spec process_response(response_spec(), body()) ->
+    {ok, object()} |
+    {error, {response_validation_failed, { {{packageName}}_validation:error(), _Response}}}.
+process_response(undefined, <<>>) ->
+    {ok, #{}};
+process_response(Spec, RespBody) ->
+    Resp = jsx:decode(RespBody, [return_maps]),
+    case validate_response(Spec, Resp) of
+        ok ->
+            {ok, Resp};
+        Error ->
+            Error
+    end.
+
+%% Internal
+
+prepare_request(Spec, Url, Params) ->
+    case validate_request(Spec, Params) of
+        ok ->
+            {ok, prepare_params(Url, Params)};
+        Error ->
+            Error
+    end.
+
+prepare_params(Url, #{binding := Bindings, qs_val := Query, header := Headers, body := Body}) ->
+    #{
+        url     => prepare_url(Url, Bindings, Query),
+        headers => maps:to_list(Headers),
+        body    => jsx:encode(Body)
+    }.
+
+prepare_url(Url, Params, Qs) ->
+    {{packageName}}_utils:fill_url(Url, Params, Qs).
+
+validate_request([], _) ->
+    ok;
+validate_request([ParamSpec | T], Params) ->
+    case validate_request_param(ParamSpec, Params) of
+        ok ->
+            validate_request(T, Params);
+        Error ->
+            Error
+    end.
+
+validate_request_param({Name, #{rules := Rules, source := Source}}, Params) ->
+    Value = get_value(Source, Name, Params),
     case {{packageName}}_validation:prepare_request_param(Rules, Name, Value) of
-        {ok, Result} -> {ok, Name, Result, RequestParams};
+        {ok, _} ->
+            ok;
         {error, Reason} ->
-            {error, Reason, RequestParams0}
+            {error, {request_validation_failed, {Reason, Name}}}
     end.
 
 -spec get_value(atom(), any(), params()) ->
-    {any(), params()}.
-get_value(body, _Name, RequestParams) ->
-    Value = maps:get(body, RequestParams),
-    {Value, RequestParams};
-get_value(qs_val, Name, RequestParams) ->
-    QueryParams = maps:get(qs_val, RequestParams),
-    Value = get_opt({{packageName}}_utils:to_binary(Name), QueryParams),
-    {Value, RequestParams};
-get_value(header, Name, RequestParams) ->
-    HeaderParams = maps:get(header, RequestParams),
-    Value = get_opt({{packageName}}_utils:to_binary(Name), HeaderParams),
-    {Value, RequestParams};
-get_value(binding, Name, RequestParams) ->
-    BindingParams = maps:get(binding, RequestParams),
-    Value = get_opt({{packageName}}_utils:to_binary(Name), BindingParams),
-    {Value, RequestParams}.
-
+    any().
+get_value(body, _Name, Params) ->
+    maps:get(body, Params);
+get_value(qs_val, Name, Params) ->
+    QueryParams = maps:get(qs_val, Params),
+    get_opt({{packageName}}_utils:to_binary(Name), QueryParams);
+get_value(header, Name, Params) ->
+    HeaderParams = maps:get(header, Params),
+    get_opt({{packageName}}_utils:to_binary(Name), HeaderParams);
+get_value(binding, Name, Params) ->
+    BindingParams = maps:get(binding, Params),
+    get_opt({{packageName}}_utils:to_binary(Name), BindingParams).
 
 get_opt(Key, Opts) ->
     get_opt(Key, Opts, undefined).
@@ -95,6 +128,10 @@ get_opt(Key, Opts) ->
 get_opt(Key, Opts, Default) ->
     maps:get(Key, Opts, Default).
 
-
-prepare_url(Url, Params, Qs) ->
-    {{packageName}}_utils:fill_url(Url, Params, Qs).
+validate_response(Spec, RespBody) ->
+    case {{packageName}}_validation:validate_response(Spec, RespBody) of
+        ok ->
+            ok;
+        {error, Error} ->
+            {error, {response_validation_failed, Error, RespBody}}
+    end.

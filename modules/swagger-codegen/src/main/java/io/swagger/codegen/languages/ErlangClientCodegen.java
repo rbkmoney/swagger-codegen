@@ -121,7 +121,6 @@ public class ErlangClientCodegen extends DefaultCodegen implements CodegenConfig
          */
         supportingFiles.add(new SupportingFile("rebar.config.mustache", "", "rebar.config"));
         supportingFiles.add(new SupportingFile("app.src.mustache", "", "src" + File.separator + this.packageName + ".app.src"));
-        supportingFiles.add(new SupportingFile("params.mustache", "", toSourceFilePath("params", "erl")));
         supportingFiles.add(new SupportingFile("procession.mustache", "", toSourceFilePath("procession", "erl")));
         supportingFiles.add(new SupportingFile("utils.mustache", "", toSourceFilePath("utils", "erl")));
         supportingFiles.add(new SupportingFile("types.mustache", "", toPackageNameSrcFile("erl")));
