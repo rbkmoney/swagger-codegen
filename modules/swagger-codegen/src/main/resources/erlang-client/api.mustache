@@ -8,13 +8,13 @@
 {{/operation}}{{/operations}}
 {{#operations}}{{#operation}}
 -spec {{operationId}}(Endpoint::{{packageName}}:endpoint(), Params::map()) ->
-    {ok, Code::integer(), RespHeaders::list(), Response :: map() | binary()} |
+    {ok, Code::integer(), RespHeaders::list(), Response :: map()} |
     {error, _Reason}.
 {{operationId}}(Endpoint, Params) ->
     {{operationId}}(Endpoint, Params, []).
 
 -spec {{operationId}}(Endpoint::{{packageName}}:endpoint(), Params::map(), Opts::{{packageName}}:transport_opts()) ->
-    {ok, Code::integer(), RespHeaders::list(), Response :: map() | binary()} |
+    {ok, Code::integer(), RespHeaders::list(), Response :: map()} |
     {error, _Reason}.
 {{operationId}}(Endpoint, Params, Opts) ->
     process_response({{packageName}}_procession:process_request(
@@ -27,7 +27,6 @@
 {{/operation}}{{/operations}}
 process_response({ok, Code, Headers, RespBody}, OperationID) ->
     try {{packageName}}_procession:process_response(
-        Code,
         get_response_spec(OperationID, Code),
         RespBody
     ) of

@@ -2,7 +2,7 @@
 -module({{packageName}}_procession).
 
 -export([process_request/5]).
--export([process_response/3]).
+-export([process_response/2]).
 
 %%
 
@@ -56,23 +56,19 @@ process_request(Method, BaseUrl, Params, Spec, Opts) ->
             Error
     end.
 
--spec process_response(code(), response_spec(), body()) ->
-    {ok, object() | body()} |
+-spec process_response(response_spec(), body()) ->
+    {ok, object()} |
     {error, {response_validation_failed, { {{packageName}}_validation:error(), _Response}}}.
-process_response(Code, Spec, RespBody) when
-    Code div 100 == 2 andalso
-    Code =/= 202      andalso
-    Code =/= 204
-->
+process_response(undefined, <<>>) ->
+    {ok, #{}};
+process_response(Spec, RespBody) ->
     Resp = jsx:decode(RespBody, [return_maps]),
     case validate_response(Spec, Resp) of
         ok ->
             {ok, Resp};
         Error ->
             Error
-    end;
-process_response(_, _, RespBody) ->
-    {ok, RespBody}.
+    end.
 
 %% Internal
 
