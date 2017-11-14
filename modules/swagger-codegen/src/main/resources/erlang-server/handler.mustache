@@ -78,7 +78,7 @@ allowed_methods(Req, State) ->
         State :: state()
     }.
 {{#operations}}{{#operation}}
-{{#authMethods}}
+{{#hasAuthMethods}}
 is_authorized(
     Req0,
     State = #state{
@@ -107,6 +107,16 @@ is_authorized(
     end;
   {{/isApiKey}}
 {{/authMethods}}
+{{/hasAuthMethods}}
+{{^hasAuthMethods}}
+is_authorized(
+    Req,
+    State = #state{
+        operation_id  = '{{operationId}}'
+    }
+) ->
+    {true, Req, State};
+{{/hasAuthMethods}}
 {{/operation}}{{/operations}}
 {{^authMethods}}
 is_authorized(Req, State) ->
