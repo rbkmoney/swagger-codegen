@@ -87,6 +87,7 @@ is_authorized(
         context       = Context
     }
 ) ->
+  {{#authMethods}}
   {{#isApiKey}}
     From = {{#isKeyInQuery}}qs_val{{/isKeyInQuery}}{{#isKeyInHeader}}header{{/isKeyInHeader}},
     Result = {{packageName}}_handler_api:authorize_api_key(
@@ -118,14 +119,8 @@ is_authorized(
     {true, Req, State};
 {{/hasAuthMethods}}
 {{/operation}}{{/operations}}
-{{^authMethods}}
-is_authorized(Req, State) ->
-    {true, Req, State}.
-{{/authMethods}}
-{{#authMethods}}
 is_authorized(Req, State) ->
     {{false, <<"">>}, Req, State}.
-{{/authMethods}}
 
 -spec content_types_accepted(Req :: cowboy_req:req(), State :: state()) ->
     {
