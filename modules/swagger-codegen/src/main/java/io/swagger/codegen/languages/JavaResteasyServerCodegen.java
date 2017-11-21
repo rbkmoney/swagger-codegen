@@ -10,9 +10,8 @@ import org.apache.commons.lang3.StringUtils;
 import java.io.File;
 import java.util.*;
 
-public class JavaResteasyServerCodegen extends AbstractJavaJAXRSServerCodegen implements JbossFeature, BeanValidationFeatures {
+public class JavaResteasyServerCodegen extends AbstractJavaJAXRSServerCodegen implements JbossFeature {
 
-    protected boolean useBeanValidation = true;
     protected boolean generateJbossDeploymentDescriptor = true;
     
     public JavaResteasyServerCodegen() {
@@ -37,7 +36,6 @@ public class JavaResteasyServerCodegen extends AbstractJavaJAXRSServerCodegen im
 
         embeddedTemplateDir = templateDir = "JavaJaxRS" + File.separator + "resteasy";
 
-        cliOptions.add(CliOption.newBoolean(USE_BEANVALIDATION, "Use BeanValidation API annotations"));
         cliOptions.add(
                 CliOption.newBoolean(GENERATE_JBOSS_DEPLOYMENT_DESCRIPTOR, "Generate Jboss Deployment Descriptor"));
     }
@@ -62,14 +60,6 @@ public class JavaResteasyServerCodegen extends AbstractJavaJAXRSServerCodegen im
             this.setGenerateJbossDeploymentDescriptor(generateJbossDeploymentDescriptorProp);
         }
         
-        if (additionalProperties.containsKey(USE_BEANVALIDATION)) {
-            this.setUseBeanValidation(convertPropertyToBoolean(USE_BEANVALIDATION));
-        }
-
-        if (useBeanValidation) {
-            writePropertyBack(USE_BEANVALIDATION, useBeanValidation);
-        }
-
         writeOptional(outputFolder, new SupportingFile("pom.mustache", "", "pom.xml"));
         writeOptional(outputFolder, new SupportingFile("gradle.mustache", "", "build.gradle"));
         writeOptional(outputFolder, new SupportingFile("settingsGradle.mustache", "", "settings.gradle"));
@@ -142,54 +132,7 @@ public class JavaResteasyServerCodegen extends AbstractJavaJAXRSServerCodegen im
 
     @Override
     public Map<String, Object> postProcessOperations(Map<String, Object> objs) {
-
-        Map<String, Object> operations = (Map<String, Object>) objs.get("operations");
-        if (operations != null) {
-            List<CodegenOperation> ops = (List<CodegenOperation>) operations.get("operation");
-            for (CodegenOperation operation : ops) {
-                if (operation.hasConsumes == Boolean.TRUE) {
-                    Map<String, String> firstType = operation.consumes.get(0);
-                    if (firstType != null) {
-                        if ("multipart/form-data".equals(firstType.get("mediaType"))) {
-                            operation.isMultipart = Boolean.TRUE;
-                        }
-                    }
-                }
-                List<CodegenResponse> responses = operation.responses;
-                if (responses != null) {
-                    for (CodegenResponse resp : responses) {
-                        if ("0".equals(resp.code)) {
-                            resp.code = "200";
-                        }
-                    }
-                }
-                if (operation.returnType == null) {
-                    operation.returnType = "Void";
-                } else if (operation.returnType.startsWith("List")) {
-                    String rt = operation.returnType;
-                    int end = rt.lastIndexOf(">");
-                    if (end > 0) {
-                        operation.returnType = rt.substring("List<".length(), end).trim();
-                        operation.returnContainer = "List";
-                    }
-                } else if (operation.returnType.startsWith("Map")) {
-                    String rt = operation.returnType;
-                    int end = rt.lastIndexOf(">");
-                    if (end > 0) {
-                        operation.returnType = rt.substring("Map<".length(), end).split(",")[1].trim();
-                        operation.returnContainer = "Map";
-                    }
-                } else if (operation.returnType.startsWith("Set")) {
-                    String rt = operation.returnType;
-                    int end = rt.lastIndexOf(">");
-                    if (end > 0) {
-                        operation.returnType = rt.substring("Set<".length(), end).trim();
-                        operation.returnContainer = "Set";
-                    }
-                }
-            }
-        }
-        return objs;
+        return super.postProcessOperations(objs);
     }
 
     @Override
@@ -226,10 +169,6 @@ public class JavaResteasyServerCodegen extends AbstractJavaJAXRSServerCodegen im
         return objs;
     }
     
-    public void setUseBeanValidation(boolean useBeanValidation) {
-        this.useBeanValidation = useBeanValidation;
-    }
-
     public void setGenerateJbossDeploymentDescriptor(boolean generateJbossDeploymentDescriptor) {
         this.generateJbossDeploymentDescriptor = generateJbossDeploymentDescriptor;
     }

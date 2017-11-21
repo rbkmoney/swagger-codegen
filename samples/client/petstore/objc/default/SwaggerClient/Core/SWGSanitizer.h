@@ -15,6 +15,8 @@
 
 extern NSString * SWGPercentEscapedStringFromString(NSString *string);
 
+extern NSString * const kSWGApplicationJSONType;
+
 @protocol SWGSanitizer <NSObject>
 
 /**
@@ -28,6 +30,11 @@ extern NSString * SWGPercentEscapedStringFromString(NSString *string);
  * Convert parameter to NSString
  */
 - (NSString *) parameterToString: (id) param;
+
+/**
+ * Convert date to NSString
+ */
++ (NSString *)dateToString:(id)date;
 
 /**
  * Detects Accept header from accepts NSArray

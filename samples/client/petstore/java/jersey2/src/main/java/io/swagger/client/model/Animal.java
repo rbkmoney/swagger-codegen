@@ -18,16 +18,19 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import com.fasterxml.jackson.annotation.JsonValue;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 
 /**
  * Animal
  */
-@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.PROPERTY, property = "className" )
-@JsonSubTypes({ 
-  @JsonSubTypes.Type(value = Dog.class, name = "Dog"),@JsonSubTypes.Type(value = Cat.class, name = "Cat"),
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.PROPERTY, property = "className", visible = true )
+@JsonSubTypes({
+  @JsonSubTypes.Type(value = Dog.class, name = "Dog"),
+  @JsonSubTypes.Type(value = Cat.class, name = "Cat"),
 })
+
 public class Animal {
   @JsonProperty("className")
   private String className = null;
@@ -44,7 +47,7 @@ public class Animal {
    * Get className
    * @return className
   **/
-  @ApiModelProperty(example = "null", required = true, value = "")
+  @ApiModelProperty(required = true, value = "")
   public String getClassName() {
     return className;
   }
@@ -62,7 +65,7 @@ public class Animal {
    * Get color
    * @return color
   **/
-  @ApiModelProperty(example = "null", value = "")
+  @ApiModelProperty(value = "")
   public String getColor() {
     return color;
   }
@@ -112,6 +115,6 @@ public class Animal {
     }
     return o.toString().replace("\n", "\n    ");
   }
-  
+
 }
 

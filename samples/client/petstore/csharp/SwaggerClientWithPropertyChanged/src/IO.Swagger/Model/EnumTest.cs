@@ -22,6 +22,7 @@ using Newtonsoft.Json.Converters;
 using PropertyChanged;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
+using SwaggerDateConverter = IO.Swagger.Client.SwaggerDateConverter;
 
 namespace IO.Swagger.Model
 {
@@ -120,7 +121,7 @@ namespace IO.Swagger.Model
         /// <param name="EnumInteger">EnumInteger.</param>
         /// <param name="EnumNumber">EnumNumber.</param>
         /// <param name="OuterEnum">OuterEnum.</param>
-        public EnumTest(EnumStringEnum? EnumString = null, EnumIntegerEnum? EnumInteger = null, EnumNumberEnum? EnumNumber = null, OuterEnum? OuterEnum = null)
+        public EnumTest(EnumStringEnum? EnumString = default(EnumStringEnum?), EnumIntegerEnum? EnumInteger = default(EnumIntegerEnum?), EnumNumberEnum? EnumNumber = default(EnumNumberEnum?), OuterEnum OuterEnum = default(OuterEnum))
         {
             this.EnumString = EnumString;
             this.EnumInteger = EnumInteger;
@@ -128,11 +129,15 @@ namespace IO.Swagger.Model
             this.OuterEnum = OuterEnum;
         }
         
+
+
+
         /// <summary>
         /// Gets or Sets OuterEnum
         /// </summary>
         [DataMember(Name="outerEnum", EmitDefaultValue=false)]
-        public OuterEnum? OuterEnum { get; set; }
+        public OuterEnum OuterEnum { get; set; }
+
         /// <summary>
         /// Returns the string presentation of the object
         /// </summary>
@@ -161,45 +166,43 @@ namespace IO.Swagger.Model
         /// <summary>
         /// Returns true if objects are equal
         /// </summary>
-        /// <param name="obj">Object to be compared</param>
+        /// <param name="input">Object to be compared</param>
         /// <returns>Boolean</returns>
-        public override bool Equals(object obj)
+        public override bool Equals(object input)
         {
-            // credit: http://stackoverflow.com/a/10454552/677735
-            return this.Equals(obj as EnumTest);
+            return this.Equals(input as EnumTest);
         }
 
         /// <summary>
         /// Returns true if EnumTest instances are equal
         /// </summary>
-        /// <param name="other">Instance of EnumTest to be compared</param>
+        /// <param name="input">Instance of EnumTest to be compared</param>
         /// <returns>Boolean</returns>
-        public bool Equals(EnumTest other)
+        public bool Equals(EnumTest input)
         {
-            // credit: http://stackoverflow.com/a/10454552/677735
-            if (other == null)
+            if (input == null)
                 return false;
 
             return 
                 (
-                    this.EnumString == other.EnumString ||
-                    this.EnumString != null &&
-                    this.EnumString.Equals(other.EnumString)
+                    this.EnumString == input.EnumString ||
+                    (this.EnumString != null &&
+                    this.EnumString.Equals(input.EnumString))
                 ) && 
                 (
-                    this.EnumInteger == other.EnumInteger ||
-                    this.EnumInteger != null &&
-                    this.EnumInteger.Equals(other.EnumInteger)
+                    this.EnumInteger == input.EnumInteger ||
+                    (this.EnumInteger != null &&
+                    this.EnumInteger.Equals(input.EnumInteger))
                 ) && 
                 (
-                    this.EnumNumber == other.EnumNumber ||
-                    this.EnumNumber != null &&
-                    this.EnumNumber.Equals(other.EnumNumber)
+                    this.EnumNumber == input.EnumNumber ||
+                    (this.EnumNumber != null &&
+                    this.EnumNumber.Equals(input.EnumNumber))
                 ) && 
                 (
-                    this.OuterEnum == other.OuterEnum ||
-                    this.OuterEnum != null &&
-                    this.OuterEnum.Equals(other.OuterEnum)
+                    this.OuterEnum == input.OuterEnum ||
+                    (this.OuterEnum != null &&
+                    this.OuterEnum.Equals(input.OuterEnum))
                 );
         }
 
@@ -209,25 +212,30 @@ namespace IO.Swagger.Model
         /// <returns>Hash code</returns>
         public override int GetHashCode()
         {
-            // credit: http://stackoverflow.com/a/263416/677735
             unchecked // Overflow is fine, just wrap
             {
-                int hash = 41;
-                // Suitable nullity checks etc, of course :)
+                int hashCode = 41;
                 if (this.EnumString != null)
-                    hash = hash * 59 + this.EnumString.GetHashCode();
+                    hashCode = hashCode * 59 + this.EnumString.GetHashCode();
                 if (this.EnumInteger != null)
-                    hash = hash * 59 + this.EnumInteger.GetHashCode();
+                    hashCode = hashCode * 59 + this.EnumInteger.GetHashCode();
                 if (this.EnumNumber != null)
-                    hash = hash * 59 + this.EnumNumber.GetHashCode();
+                    hashCode = hashCode * 59 + this.EnumNumber.GetHashCode();
                 if (this.OuterEnum != null)
-                    hash = hash * 59 + this.OuterEnum.GetHashCode();
-                return hash;
+                    hashCode = hashCode * 59 + this.OuterEnum.GetHashCode();
+                return hashCode;
             }
         }
 
+        /// <summary>
+        /// Property changed event handler
+        /// </summary>
         public event PropertyChangedEventHandler PropertyChanged;
 
+        /// <summary>
+        /// Trigger when a property changed
+        /// </summary>
+        /// <param name="propertyName">Property Name</param>
         public virtual void OnPropertyChanged(string propertyName)
         {
             // NOTE: property changed is handled via "code weaving" using Fody.
@@ -239,8 +247,13 @@ namespace IO.Swagger.Model
             }
         }
 
-        public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
-        { 
+        /// <summary>
+        /// To validate all properties of the instance
+        /// </summary>
+        /// <param name="validationContext">Validation context</param>
+        /// <returns>Validation Result</returns>
+        IEnumerable<System.ComponentModel.DataAnnotations.ValidationResult> IValidatableObject.Validate(ValidationContext validationContext)
+        {
             yield break;
         }
     }

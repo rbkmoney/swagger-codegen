@@ -87,7 +87,7 @@ is_authorized(
         context       = Context
     }
 ) ->
-{{#authMethods}}
+  {{#authMethods}}
   {{#isApiKey}}
     From = {{#isKeyInQuery}}qs_val{{/isKeyInQuery}}{{#isKeyInHeader}}header{{/isKeyInHeader}},
     Result = {{packageName}}_handler_api:authorize_api_key(

@@ -13,18 +13,21 @@ import javax.enterprise.context.RequestScoped;
 import javax.inject.Inject;
 
 import io.swagger.annotations.*;
+import java.io.InputStream;
 
 import org.apache.cxf.jaxrs.ext.multipart.Attachment;
+import org.apache.cxf.jaxrs.ext.multipart.Multipart;
 
+import java.util.Map;
 import java.util.List;
-
+import javax.validation.constraints.*;
 @Path("/pet")
 @RequestScoped
 
 @Api(description = "the pet API")
 
 
-@javax.annotation.Generated(value = "class io.swagger.codegen.languages.JavaJAXRSCXFCDIServerCodegen", date = "2016-11-17T08:53:42.205Z")
+
 
 public class PetApi  {
 
@@ -37,32 +40,32 @@ public class PetApi  {
     
     @Consumes({ "application/json", "application/xml" })
     @Produces({ "application/xml", "application/json" })
-    @ApiOperation(value = "Add a new pet to the store", notes = "", response = void.class, authorizations = {
+    @ApiOperation(value = "Add a new pet to the store", notes = "", response = Void.class, authorizations = {
         @Authorization(value = "petstore_auth", scopes = {
             @AuthorizationScope(scope = "write:pets", description = "modify pets in your account"),
             @AuthorizationScope(scope = "read:pets", description = "read your pets")
         })
     }, tags={ "pet",  })
     @ApiResponses(value = { 
-        @ApiResponse(code = 405, message = "Invalid input", response = void.class) })
+        @ApiResponse(code = 405, message = "Invalid input", response = Void.class) })
     public Response addPet(@ApiParam(value = "Pet object that needs to be added to the store" ,required=true) Pet body) {
-    	return delegate.addPet(body, securityContext);
+        return delegate.addPet(body, securityContext);
     }
 
     @DELETE
     @Path("/{petId}")
     
     @Produces({ "application/xml", "application/json" })
-    @ApiOperation(value = "Deletes a pet", notes = "", response = void.class, authorizations = {
+    @ApiOperation(value = "Deletes a pet", notes = "", response = Void.class, authorizations = {
         @Authorization(value = "petstore_auth", scopes = {
             @AuthorizationScope(scope = "write:pets", description = "modify pets in your account"),
             @AuthorizationScope(scope = "read:pets", description = "read your pets")
         })
     }, tags={ "pet",  })
     @ApiResponses(value = { 
-        @ApiResponse(code = 400, message = "Invalid pet value", response = void.class) })
+        @ApiResponse(code = 400, message = "Invalid pet value", response = Void.class) })
     public Response deletePet(@ApiParam(value = "Pet id to delete",required=true) @PathParam("petId") Long petId, @ApiParam(value = "" )@HeaderParam("api_key") String apiKey) {
-    	return delegate.deletePet(petId, apiKey, securityContext);
+        return delegate.deletePet(petId, apiKey, securityContext);
     }
 
     @GET
@@ -77,9 +80,9 @@ public class PetApi  {
     }, tags={ "pet",  })
     @ApiResponses(value = { 
         @ApiResponse(code = 200, message = "successful operation", response = Pet.class, responseContainer = "List"),
-        @ApiResponse(code = 400, message = "Invalid status value", response = Pet.class, responseContainer = "List") })
-    public Response findPetsByStatus(@ApiParam(value = "Status values that need to be considered for filter",required=true, allowableValues="available, pending, sold")  @QueryParam("status") List<String> status) {
-    	return delegate.findPetsByStatus(status, securityContext);
+        @ApiResponse(code = 400, message = "Invalid status value", response = Void.class) })
+    public Response findPetsByStatus( @NotNull @ApiParam(value = "Status values that need to be considered for filter",required=true, allowableValues="available, pending, sold")  @QueryParam("status") List<String> status) {
+        return delegate.findPetsByStatus(status, securityContext);
     }
 
     @GET
@@ -94,9 +97,9 @@ public class PetApi  {
     }, tags={ "pet",  })
     @ApiResponses(value = { 
         @ApiResponse(code = 200, message = "successful operation", response = Pet.class, responseContainer = "List"),
-        @ApiResponse(code = 400, message = "Invalid tag value", response = Pet.class, responseContainer = "List") })
-    public Response findPetsByTags(@ApiParam(value = "Tags to filter by",required=true)  @QueryParam("tags") List<String> tags) {
-    	return delegate.findPetsByTags(tags, securityContext);
+        @ApiResponse(code = 400, message = "Invalid tag value", response = Void.class) })
+    public Response findPetsByTags( @NotNull @ApiParam(value = "Tags to filter by",required=true)  @QueryParam("tags") List<String> tags) {
+        return delegate.findPetsByTags(tags, securityContext);
     }
 
     @GET
@@ -108,44 +111,44 @@ public class PetApi  {
     }, tags={ "pet",  })
     @ApiResponses(value = { 
         @ApiResponse(code = 200, message = "successful operation", response = Pet.class),
-        @ApiResponse(code = 400, message = "Invalid ID supplied", response = Pet.class),
-        @ApiResponse(code = 404, message = "Pet not found", response = Pet.class) })
+        @ApiResponse(code = 400, message = "Invalid ID supplied", response = Void.class),
+        @ApiResponse(code = 404, message = "Pet not found", response = Void.class) })
     public Response getPetById(@ApiParam(value = "ID of pet to return",required=true) @PathParam("petId") Long petId) {
-    	return delegate.getPetById(petId, securityContext);
+        return delegate.getPetById(petId, securityContext);
     }
 
     @PUT
     
     @Consumes({ "application/json", "application/xml" })
     @Produces({ "application/xml", "application/json" })
-    @ApiOperation(value = "Update an existing pet", notes = "", response = void.class, authorizations = {
+    @ApiOperation(value = "Update an existing pet", notes = "", response = Void.class, authorizations = {
         @Authorization(value = "petstore_auth", scopes = {
             @AuthorizationScope(scope = "write:pets", description = "modify pets in your account"),
             @AuthorizationScope(scope = "read:pets", description = "read your pets")
         })
     }, tags={ "pet",  })
     @ApiResponses(value = { 
-        @ApiResponse(code = 400, message = "Invalid ID supplied", response = void.class),
-        @ApiResponse(code = 404, message = "Pet not found", response = void.class),
-        @ApiResponse(code = 405, message = "Validation exception", response = void.class) })
+        @ApiResponse(code = 400, message = "Invalid ID supplied", response = Void.class),
+        @ApiResponse(code = 404, message = "Pet not found", response = Void.class),
+        @ApiResponse(code = 405, message = "Validation exception", response = Void.class) })
     public Response updatePet(@ApiParam(value = "Pet object that needs to be added to the store" ,required=true) Pet body) {
-    	return delegate.updatePet(body, securityContext);
+        return delegate.updatePet(body, securityContext);
     }
 
     @POST
     @Path("/{petId}")
     @Consumes({ "application/x-www-form-urlencoded" })
     @Produces({ "application/xml", "application/json" })
-    @ApiOperation(value = "Updates a pet in the store with form data", notes = "", response = void.class, authorizations = {
+    @ApiOperation(value = "Updates a pet in the store with form data", notes = "", response = Void.class, authorizations = {
         @Authorization(value = "petstore_auth", scopes = {
             @AuthorizationScope(scope = "write:pets", description = "modify pets in your account"),
             @AuthorizationScope(scope = "read:pets", description = "read your pets")
         })
     }, tags={ "pet",  })
     @ApiResponses(value = { 
-        @ApiResponse(code = 405, message = "Invalid input", response = void.class) })
+        @ApiResponse(code = 405, message = "Invalid input", response = Void.class) })
     public Response updatePetWithForm(@ApiParam(value = "ID of pet that needs to be updated",required=true) @PathParam("petId") Long petId, @Multipart(value = "name", required = false)  String name, @Multipart(value = "status", required = false)  String status) {
-    	return delegate.updatePetWithForm(petId, name, status, securityContext);
+        return delegate.updatePetWithForm(petId, name, status, securityContext);
     }
 
     @POST
@@ -161,6 +164,6 @@ public class PetApi  {
     @ApiResponses(value = { 
         @ApiResponse(code = 200, message = "successful operation", response = ModelApiResponse.class) })
     public Response uploadFile(@ApiParam(value = "ID of pet to update",required=true) @PathParam("petId") Long petId, @Multipart(value = "additionalMetadata", required = false)  String additionalMetadata,  @Multipart(value = "file", required = false) InputStream fileInputStream, @Multipart(value = "file" , required = false) Attachment fileDetail) {
-    	return delegate.uploadFile(petId, additionalMetadata, inputStream, fileDetail, securityContext);
+        return delegate.uploadFile(petId, additionalMetadata, fileInputStream, fileDetail, securityContext);
     }
 }

@@ -4,6 +4,8 @@
 -export([request_param_info/2]).
 -export([populate_request/3]).
 -export([validate_response/4]).
+%% exported to silence swagger complains
+-export([get_value/3, validate_response_body/4]).
 
 -type operation_id() :: atom().
 -type request_param() :: atom().
@@ -271,7 +273,6 @@ request_param_info('DeleteOrder', 'orderId') ->
         source =>  binding ,
         rules => [
             {type, 'binary'},
-            {min, 1.0 },
             required
         ]
     };
@@ -281,8 +282,8 @@ request_param_info('GetOrderById', 'orderId') ->
         source =>  binding ,
         rules => [
             {type, 'integer'},
-            {max, 5.0 }, 
-            {min, 1.0 },
+            {max, 5 }, 
+            {min, 1 },
             required
         ]
     };
@@ -600,7 +601,7 @@ validate(Rule = {enum, Values}, Name, Value, _ValidatorState) ->
     end;
 
 validate(Rule = {max, Max}, Name, Value, _ValidatorState) ->
-    case Value >= Max of
+    case Value =< Max of
         true -> ok;
         false -> validation_error(Rule, Name)
     end;
@@ -612,7 +613,7 @@ validate(Rule = {exclusive_max, ExclusiveMax}, Name, Value, _ValidatorState) ->
     end;
 
 validate(Rule = {min, Min}, Name, Value, _ValidatorState) ->
-    case Value =< Min of
+    case Value >= Min of
         true -> ok;
         false -> validation_error(Rule, Name)
     end;
@@ -678,6 +679,8 @@ validation_error(ViolatedRule, Name) ->
 validation_error(ViolatedRule, Name, Info) ->
     throw({wrong_param, Name, ViolatedRule, Info}).
 
+-spec get_value(body | qs_val | header | binding, Name :: any(), Req0 :: cowboy_req:req()) ->
+    {Value :: any(), Req :: cowboy_req:req()}.
 get_value(body, _Name, Req0) ->
     {ok, Body, Req} = cowboy_req:body(Req0),
     Value = prepare_body(Body),

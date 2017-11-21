@@ -6,10 +6,14 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import io.swagger.annotations.ApiModel;
 import io.swagger.annotations.ApiModelProperty;
 import io.swagger.model.Animal;
+import org.springframework.validation.annotation.Validated;
+import javax.validation.Valid;
+import javax.validation.constraints.*;
 
 /**
  * Cat
  */
+@Validated
 
 public class Cat extends Animal  {
   @JsonProperty("declawed")
@@ -25,7 +29,9 @@ public class Cat extends Animal  {
    * @return declawed
   **/
   @ApiModelProperty(value = "")
-  public Boolean getDeclawed() {
+
+
+  public Boolean isDeclawed() {
     return declawed;
   }
 

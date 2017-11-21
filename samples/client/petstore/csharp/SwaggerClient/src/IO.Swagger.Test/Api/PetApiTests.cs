@@ -97,7 +97,7 @@ namespace IO.Swagger.Test
         [Test]
         public void InstanceTest()
         {
-			Assert.IsInstanceOfType(typeof(PetApi), instance, "instance is a PetApi");
+			Assert.IsInstanceOf<PetApi>(instance);
         }
 
         
@@ -109,8 +109,7 @@ namespace IO.Swagger.Test
         {
 			// create pet
 			Pet p = createPet();
-
-            instance.AddPet(p);      
+			instance.AddPet(p);
         }
         
         /// <summary>
@@ -134,7 +133,7 @@ namespace IO.Swagger.Test
 			List<Pet> listPet = petApi.FindPetsByTags (tagsList);
 			foreach (Pet pet in listPet) // Loop through List with foreach.
 			{
-				Assert.IsInstanceOfType(typeof(Pet), pet, "Response is a Pet");
+				Assert.IsInstanceOf<Pet>(pet);
 				Assert.AreEqual ("csharp sample tag name1", pet.Tags[0]);
 			}
         }
@@ -147,7 +146,7 @@ namespace IO.Swagger.Test
         {
 			List<string> tags = new List<String>(new String[] {"pet"});
             var response = instance.FindPetsByTags(tags);
-			Assert.IsInstanceOfType(typeof(List<Pet>), response, "response is List<Pet>");
+			Assert.IsInstanceOf<List<Pet>>(response);
         }
         
         /// <summary>
@@ -157,23 +156,25 @@ namespace IO.Swagger.Test
         public void GetPetByIdTest()
         {
 			// set timeout to 10 seconds
-			Configuration c1 = new Configuration (timeout: 10000, userAgent: "TEST_USER_AGENT");
+			Configuration c1 = new Configuration();
+			c1.Timeout = 10000;
+			c1.UserAgent = "TEST_USER_AGENT";
 
 			PetApi petApi = new PetApi (c1);
 			Pet response = petApi.GetPetById (petId);
-			Assert.IsInstanceOfType(typeof(Pet), response, "Response is a Pet");
+			Assert.IsInstanceOf<Pet>(response);
 
 			Assert.AreEqual ("Csharp test", response.Name);
 			Assert.AreEqual (Pet.StatusEnum.Available, response.Status);
 
-			Assert.IsInstanceOfType(typeof(List<Tag>), response.Tags, "Response.Tags is a Array");
+			Assert.IsInstanceOf<List<Tag>>(response.Tags);
 			Assert.AreEqual (petId, response.Tags [0].Id);
 			Assert.AreEqual ("csharp sample tag name1", response.Tags [0].Name);
 
-			Assert.IsInstanceOfType(typeof(List<String>), response.PhotoUrls, "Response.PhotoUrls is a Array");
+			Assert.IsInstanceOf<List<String>>(response.PhotoUrls);
 			Assert.AreEqual ("sample photoUrls", response.PhotoUrls [0]);
 
-			Assert.IsInstanceOfType(typeof(Category), response.Category, "Response.Category is a Category");
+			Assert.IsInstanceOf<Category>(response.Category);
 			Assert.AreEqual (56, response.Category.Id);
 			Assert.AreEqual ("sample category name2", response.Category.Name);
         }
@@ -187,22 +188,21 @@ namespace IO.Swagger.Test
 			PetApi petApi = new PetApi ();
 			var task = petApi.GetPetByIdAsync (petId);
 			Pet response = task.Result;
-			Assert.IsInstanceOfType(typeof(Pet), response, "Response is a Pet");
+			Assert.IsInstanceOf<Pet>(response);
 
 			Assert.AreEqual ("Csharp test", response.Name);
 			Assert.AreEqual (Pet.StatusEnum.Available, response.Status);
 
-			Assert.IsInstanceOfType(typeof(List<Tag>), response.Tags, "Response.Tags is a Array");
+			Assert.IsInstanceOf<List<Tag>>(response.Tags);
 			Assert.AreEqual (petId, response.Tags [0].Id);
 			Assert.AreEqual ("csharp sample tag name1", response.Tags [0].Name);
 
-			Assert.IsInstanceOfType(typeof(List<String>), response.PhotoUrls, "Response.PhotoUrls is a Array");
+			Assert.IsInstanceOf<List<String>>(response.PhotoUrls);
 			Assert.AreEqual ("sample photoUrls", response.PhotoUrls [0]);
 
-			Assert.IsInstanceOfType(typeof(Category), response.Category, "Response.Category is a Category");
+			Assert.IsInstanceOf<Category>(response.Category);
 			Assert.AreEqual (56, response.Category.Id);
 			Assert.AreEqual ("sample category name2", response.Category.Name);
-
 		}
         
 		/// <summary>
@@ -219,22 +219,21 @@ namespace IO.Swagger.Test
 			Assert.AreEqual (task.Result.Headers["Content-Type"], "application/json");
 
 			Pet response = task.Result.Data;
-			Assert.IsInstanceOfType(typeof(Pet), response, "Response is a Pet");
+			Assert.IsInstanceOf<Pet>(response);
 
 			Assert.AreEqual ("Csharp test", response.Name);
 			Assert.AreEqual (Pet.StatusEnum.Available, response.Status);
 
-			Assert.IsInstanceOfType(typeof(List<Tag>), response.Tags, "Response.Tags is a Array");
+			Assert.IsInstanceOf<List<Tag>>(response.Tags);
 			Assert.AreEqual (petId, response.Tags [0].Id);
 			Assert.AreEqual ("csharp sample tag name1", response.Tags [0].Name);
 
-			Assert.IsInstanceOfType(typeof(List<String>), response.PhotoUrls, "Response.PhotoUrls is a Array");
+			Assert.IsInstanceOf<List<String>>(response.PhotoUrls);
 			Assert.AreEqual ("sample photoUrls", response.PhotoUrls [0]);
 
-			Assert.IsInstanceOfType(typeof(Category), response.Category, "Response.Category is a Category");
+			Assert.IsInstanceOf<Category>(response.Category);
 			Assert.AreEqual (56, response.Category.Id);
 			Assert.AreEqual ("sample category name2", response.Category.Name);
-
 		}
 
         /// <summary>
@@ -254,13 +253,13 @@ namespace IO.Swagger.Test
         [Test]
         public void UpdatePetWithFormTest()
         {
-			PetApi petApi = new PetApi ();
+			PetApi petApi = new PetApi();
 			petApi.UpdatePetWithForm (petId, "new form name", "pending");
 
 			Pet response = petApi.GetPetById (petId);
-			Assert.IsInstanceOfType(typeof(Pet), response, "Response is a Pet");
-			Assert.IsInstanceOfType(typeof(Category), response.Category, "Response.Category is a Category");
-			Assert.IsInstanceOfType(typeof(List<Tag>), response.Tags, "Response.Tags is a Array");
+			Assert.IsInstanceOf<Pet>(response);
+			Assert.IsInstanceOf<Category>(response.Category);
+			Assert.IsInstanceOf<List<Tag>>(response.Tags);
 
 			Assert.AreEqual ("new form name", response.Name);
 			Assert.AreEqual (Pet.StatusEnum.Pending, response.Status);
@@ -271,7 +270,7 @@ namespace IO.Swagger.Test
 			// test optional parameter
 			petApi.UpdatePetWithForm (petId, "new form name2");
 			Pet response2 = petApi.GetPetById (petId);
-			Assert.AreEqual ("new form name2", response2.Name);           
+			Assert.AreEqual ("new form name2", response2.Name);
         }
         
         /// <summary>
