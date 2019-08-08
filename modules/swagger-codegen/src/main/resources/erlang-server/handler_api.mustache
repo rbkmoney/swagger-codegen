@@ -7,6 +7,8 @@
 -export([validate_response/3]).
 -export([encode_response/1]).
 -export([process_response/4]).
+-export([error_message/1]).
+-export([error_message/2]).
 
 %%
 -type param_source() ::
@@ -148,17 +150,32 @@ populate_request_param({Name, #{rules := Rules, source := Source}}, Req0, Valida
             {error, error_message(Name, wrong_body, Message), Req}
     end.
 
+-spec error_message(Error :: {{packageName}}_validation:error()) ->
+    Message :: {{packageName}}:error_reason().
+error_message(Error) ->
+    error_message(undefined, Error).
+
 -spec error_message(Name :: {{packageName}}:param_name(), Error :: {{packageName}}_validation:error()) ->
     Message :: {{packageName}}:error_reason().
 error_message(Name, Error = #{type := Type}) ->
     error_message(Name, Type, maps:get(description, Error, <<>>)).
 
 error_message(Name, ErrorType, Description) ->
-    jsx:encode(#{
-        <<"name">>        => {{packageName}}_utils:to_binary(Name),
+    Message = #{
         <<"errorType">>   => {{packageName}}_utils:to_binary(ErrorType),
         <<"description">> => {{packageName}}_utils:to_binary(Description)
-    }).
+    },
+    encode_error_message(maybe_add_name(Name, Message)).
+
+maybe_add_name(undefined, Message) ->
+    Message;
+maybe_add_name(Name, Message) ->
+    Message#{
+        <<"name">> => {{packageName}}_utils:to_binary(Name)
+    }.
+
+encode_error_message(Message) ->
+    jsx:encode(Message).
 
 determine_peer_from_header(undefined, {IP, Port}) ->
     % undefined, assuming no proxies were involved

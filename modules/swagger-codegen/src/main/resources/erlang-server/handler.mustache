@@ -220,12 +220,17 @@ handle_request_json(
     case populate_request(OperationID, Req0, ValidationOpts) of
         {ok, Populated, Req1} ->
             {Status, Resp} = handle_request(LogicHandler, OperationID, Populated, Context),
-            ok = validate_response(Status, Resp, OperationID, ValidationOpts),
-            process_response(ok, encode_response(Resp), Req1, State);
+            try
+                ok = validate_response(Status, Resp, OperationID, ValidationOpts),
+                process_response(ok, encode_response(Resp), Req1, State)
+            catch
+                error:{response_validation_failed, Error, _RespBody} ->
+                    Message = {{packageName}}_handler_api:error_message(Error),
+                    process_response(error, Message, Req1, State)
+            end;
         {error, Reason, Req1} ->
             process_response(error, Reason, Req1, State)
     end.
-
 
 %% Internal
 
